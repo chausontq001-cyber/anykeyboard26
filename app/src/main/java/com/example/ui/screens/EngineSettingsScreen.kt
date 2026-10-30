@@ -401,18 +401,18 @@ fun EngineSettingsScreen(
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(swipeSpaceToMoveCursor = c) } }
                 )
 
-                // 2. Hold 0.5s and swipe to switch language
+                // 2. Hold 0.7s and swipe to switch language
                 FeatureToggleRow(
-                    title = "Giữ 0,5s và lướt để chuyển đổi ngôn ngữ",
-                    subtitle = "Nhấn giữ phím cách 500ms rồi lướt sang trái/phải để đổi ngôn ngữ. Nếu đã lướt phím cách để di chuyển con trỏ trước thời hạn 700ms thì sẽ không kích hoạt lướt đổi ngôn ngữ.",
+                    title = "Giữ 0,7s và lướt để chuyển đổi ngôn ngữ",
+                    subtitle = "Nhấn giữ phím cách 700ms rồi lướt sang trái/phải để đổi ngôn ngữ. Nếu đã lướt phím cách để di chuyển con trỏ trước thời hạn 700ms thì sẽ không kích hoạt lướt đổi ngôn ngữ.",
                     checked = settings.holdSpaceToSwitchLanguage,
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(holdSpaceToSwitchLanguage = c) } }
                 )
 
                 // 3. Swipe backspace to delete fast
                 FeatureToggleRow(
-                    title = "Lướt trên phím xóa để xóa nhanh hàng loạt",
-                    subtitle = "Trượt ngón tay từ phím xóa sang trái để xóa nhanh nhiều từ hoặc cả câu",
+                    title = "Lướt phải trên phím xóa để xóa nhanh",
+                    subtitle = "Trượt ngón tay sang phải từ phím xóa để xóa nhanh",
                     checked = settings.swipeBackspaceToDeleteFast,
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(swipeBackspaceToDeleteFast = c) } }
                 )

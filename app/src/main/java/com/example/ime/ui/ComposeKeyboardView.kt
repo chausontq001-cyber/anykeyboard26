@@ -8,6 +8,8 @@ import android.os.Vibrator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -60,7 +62,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,6 +80,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import com.example.ime.model.KeyboardAlignment
 import com.example.ime.model.KeyboardColorScheme
 import com.example.ime.model.KeyboardDisplayStyle
@@ -1021,7 +1026,6 @@ private fun RowScope.BackspaceGestureKeyCap(
     onClick: () -> Unit,
     onFastDelete: () -> Unit
 ) {
-    var accumulatedDrag by remember { mutableFloatStateOf(0f) }
     var isSwiping by remember { mutableStateOf(false) }
 
     Box(
@@ -1033,32 +1037,53 @@ private fun RowScope.BackspaceGestureKeyCap(
             .background(if (isSwiping) colorScheme.accentActionColor.copy(alpha = 0.3f) else colorScheme.specialKeyColor)
             .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
             .pointerInput(enableSwipeDelete) {
-                detectDragGestures(
-                    onDragStart = {
-                        accumulatedDrag = 0f
+                coroutineScope {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var lastX = down.position.x
+                        var totalDragX = 0f
+                        var didSwipeDelete = false
+                        var wasLongPress = false
                         isSwiping = false
-                    },
-                    onDragEnd = {
-                        if (!isSwiping && abs(accumulatedDrag) < 15f) {
-                            onClick()
+
+                        val repeatJob = launch {
+                            delay(viewConfiguration.longPressTimeoutMillis)
+                            if (!didSwipeDelete) {
+                                wasLongPress = true
+                                while (isActive) {
+                                    onClick()
+                                    delay(55)
+                                }
+                            }
                         }
-                        isSwiping = false
-                        accumulatedDrag = 0f
-                    },
-                    onDragCancel = {
-                        isSwiping = false
-                        accumulatedDrag = 0f
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        accumulatedDrag += dragAmount.x
-                        if (enableSwipeDelete && accumulatedDrag < -25f) {
-                            isSwiping = true
-                            onFastDelete()
-                            accumulatedDrag = 0f
+
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+
+                                totalDragX += change.position.x - lastX
+                                lastX = change.position.x
+
+                                if (enableSwipeDelete && !didSwipeDelete && totalDragX > 25f) {
+                                    didSwipeDelete = true
+                                    isSwiping = true
+                                    repeatJob.cancel()
+                                    onFastDelete()
+                                }
+                                if (didSwipeDelete || abs(totalDragX) > 8f) {
+                                    change.consume()
+                                }
+                            }
+                        } finally {
+                            repeatJob.cancel()
+                            isSwiping = false
                         }
+
+                        if (!didSwipeDelete && !wasLongPress && abs(totalDragX) < 15f) onClick()
                     }
-                )
+                }
             }
             .testTag("key_backspace_gesture"),
         contentAlignment = Alignment.Center
@@ -1099,9 +1124,6 @@ private fun RowScope.SpaceGestureKeyCap(
         }
     }
 
-    var pressStartTime by remember { mutableLongStateOf(0L) }
-    var totalDragX by remember { mutableFloatStateOf(0f) }
-    var cursorStepDrag by remember { mutableFloatStateOf(0f) }
     var isLongPressLanguageSwitch by remember { mutableStateOf(false) }
     var hasMovedCursorEarly by remember { mutableStateOf(false) }
 
@@ -1114,63 +1136,67 @@ private fun RowScope.SpaceGestureKeyCap(
             .background(if (isLongPressLanguageSwitch && !hasMovedCursorEarly) colorScheme.accentActionColor.copy(alpha = 0.25f) else colorScheme.keyBackgroundColor)
             .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
             .pointerInput(settings.swipeSpaceToMoveCursor, settings.holdSpaceToSwitchLanguage) {
-                detectDragGestures(
-                    onDragStart = {
-                        pressStartTime = System.currentTimeMillis()
-                        totalDragX = 0f
-                        cursorStepDrag = 0f
+                coroutineScope {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val pressStartTime = System.currentTimeMillis()
+                        var lastX = down.position.x
+                        var totalDragX = 0f
+                        var cursorStepDrag = 0f
+                        var didMoveCursor = false
+                        var didSwitchLanguage = false
                         isLongPressLanguageSwitch = false
                         hasMovedCursorEarly = false
-                    },
-                    onDragEnd = {
-                        val duration = System.currentTimeMillis() - pressStartTime
-                        if (isLongPressLanguageSwitch && !hasMovedCursorEarly) {
-                            onCycleLanguage()
-                        } else if (abs(totalDragX) < 15f && duration < 500 && !hasMovedCursorEarly) {
-                            onClick()
-                        }
-                        isLongPressLanguageSwitch = false
-                        hasMovedCursorEarly = false
-                        totalDragX = 0f
-                    },
-                    onDragCancel = {
-                        isLongPressLanguageSwitch = false
-                        hasMovedCursorEarly = false
-                        totalDragX = 0f
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        totalDragX += dragAmount.x
-                        val duration = System.currentTimeMillis() - pressStartTime
 
-                        // 1. Swipe space to move cursor. If moved before 700ms, lock out language switch permanently
-                        if (!isLongPressLanguageSwitch && settings.swipeSpaceToMoveCursor) {
-                            cursorStepDrag += dragAmount.x
-                            if (cursorStepDrag > 18f) {
-                                onMoveCursorRight()
-                                cursorStepDrag = 0f
-                                if (duration < 700) {
-                                    hasMovedCursorEarly = true
-                                }
-                            } else if (cursorStepDrag < -18f) {
-                                onMoveCursorLeft()
-                                cursorStepDrag = 0f
-                                if (duration < 700) {
-                                    hasMovedCursorEarly = true
-                                }
+                        val languageSwitchJob = launch {
+                            delay(700)
+                            if (settings.holdSpaceToSwitchLanguage && !hasMovedCursorEarly) {
+                                isLongPressLanguageSwitch = true
                             }
                         }
 
-                        // 2. Language switch threshold is now 500ms; cannot be activated if cursor was moved before 700ms
-                        if (!hasMovedCursorEarly && settings.holdSpaceToSwitchLanguage && duration >= 500) {
-                            isLongPressLanguageSwitch = true
-                            if (abs(totalDragX) > 40f) {
-                                onCycleLanguage()
-                                totalDragX = 0f
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+
+                                val dragX = change.position.x - lastX
+                                lastX = change.position.x
+                                totalDragX += dragX
+                                val duration = System.currentTimeMillis() - pressStartTime
+
+                                if (isLongPressLanguageSwitch && !didSwitchLanguage) {
+                                    if (abs(totalDragX) > 40f) {
+                                        onCycleLanguage()
+                                        didSwitchLanguage = true
+                                    }
+                                } else if (!isLongPressLanguageSwitch && settings.swipeSpaceToMoveCursor) {
+                                    cursorStepDrag += dragX
+                                    if (cursorStepDrag > 18f) {
+                                        onMoveCursorRight()
+                                        cursorStepDrag = 0f
+                                        didMoveCursor = true
+                                        if (duration < 700) hasMovedCursorEarly = true
+                                    } else if (cursorStepDrag < -18f) {
+                                        onMoveCursorLeft()
+                                        cursorStepDrag = 0f
+                                        didMoveCursor = true
+                                        if (duration < 700) hasMovedCursorEarly = true
+                                    }
+                                }
+
+                                if (abs(dragX) > 2f || isLongPressLanguageSwitch) change.consume()
                             }
+                        } finally {
+                            languageSwitchJob.cancel()
+                            isLongPressLanguageSwitch = false
+                            hasMovedCursorEarly = false
                         }
+
+                        if (!didMoveCursor && !didSwitchLanguage && abs(totalDragX) < 18f) onClick()
                     }
-                )
+                }
             }
             .testTag("key_space_gesture"),
         contentAlignment = Alignment.Center
