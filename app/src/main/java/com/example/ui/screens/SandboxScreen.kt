@@ -3,8 +3,6 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -31,12 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -64,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -86,12 +81,13 @@ import kotlin.math.abs
 fun SandboxScreen(
     preferences: KeyboardPreferences,
     onNavigateToSettings: () -> Unit,
-    isImeEnabled: Boolean,
     isImeDefault: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val settings by preferences.settings.collectAsState()
+    val testFieldHeight = (configuration.screenWidthDp * 0.32f).coerceIn(100f, 180f).dp
 
     // Test pad state
     val initialText = "Xin chào! Đây là bàn phím tiếng Việt thông minh với Telex & VNI."
@@ -388,71 +384,6 @@ fun SandboxScreen(
             }
         }
 
-        // 1. Activation & Quick Setup Banner
-        if (!isImeEnabled) Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-            ),
-            modifier = Modifier.fillMaxWidth().testTag("activation_card")
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Keyboard,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = "Kích hoạt bàn phím hệ thống",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-
-                Text(
-                    text = "Để sử dụng trong mọi ứng dụng (Zalo, Messenger, Chrome...), hãy bật Bàn phím Tiếng Việt trong Cài đặt Android và chọn làm phương thức nhập.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f).testTag("btn_enable_ime")
-                    ) {
-                        Text("1. Bật trong Cài đặt", fontSize = 12.sp)
-                    }
-
-                    FilledTonalButton(
-                        onClick = {
-                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                            imm?.showInputMethodPicker()
-                        },
-                        modifier = Modifier.weight(1f).testTag("btn_choose_ime")
-                    ) {
-                        Text("2. Chọn bàn phím", fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
         // 2. Interactive Testing Pad
         OutlinedCard(
             shape = RoundedCornerShape(16.dp),
@@ -472,6 +403,7 @@ fun SandboxScreen(
                 ) {
                     Text(
                         text = "Khung thử gõ tiếng Việt",
+                        modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -513,7 +445,7 @@ fun SandboxScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(100.dp)
+                        .height(testFieldHeight)
                         .clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                         .padding(12.dp)
@@ -651,7 +583,6 @@ fun SandboxScreen(
                     )
 
                     OutlinedButton(
-                        enabled = isImeEnabled,
                         onClick = onNavigateToSettings,
                         modifier = Modifier.height(32.dp).testTag("btn_customize_keyboard")
                     ) {

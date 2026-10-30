@@ -8,6 +8,8 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedText
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
@@ -30,6 +32,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.MainActivity
+import com.example.ime.CursorMovement
 import com.example.ime.NavigationBarPolicy
 import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.VietnameseEngine
@@ -66,6 +69,7 @@ class VietnameseInputMethodService : InputMethodService(),
     private var deleteSelectionEnd = 0
     private var deleteSelectionBounds: IntRange? = null
     private var fallbackShiftHeld = false
+    private var fallbackSelectionSteps = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -243,6 +247,34 @@ class VietnameseInputMethodService : InputMethodService(),
         }
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(
+            oldSelStart,
+            oldSelEnd,
+            newSelStart,
+            newSelEnd,
+            candidatesStart,
+            candidatesEnd
+        )
+        if (!::engine.isInitialized || !engine.isWordActive()) return
+
+        if (candidatesStart < 0 ||
+            candidatesEnd < candidatesStart ||
+            newSelStart != candidatesEnd ||
+            newSelEnd != candidatesEnd
+        ) {
+            resetComposing()
+            currentInputConnection?.finishComposingText()
+        }
+    }
+
     override fun onDestroy() {
         try {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
@@ -262,20 +294,21 @@ class VietnameseInputMethodService : InputMethodService(),
         when (val result = engine.processChar(c)) {
             is VietnameseEngine.ProcessResult.Composing -> {
                 composingWordState = result.text
+                refreshInputSelection(ic)
                 ic.setComposingText(result.text, 1)
                 updateSuggestions(result.text)
             }
             is VietnameseEngine.ProcessResult.WordBoundary -> {
                 if (result.committedWord.isNotEmpty()) {
-                    ic.commitText(result.committedWord, 1)
+                    commitTextAtCurrentSelection(ic, result.committedWord)
                     lastCommittedWord = result.committedWord
                 }
-                ic.commitText(result.boundaryChar.toString(), 1)
+                commitTextAtCurrentSelection(ic, result.boundaryChar.toString())
                 resetComposing()
             }
             is VietnameseEngine.ProcessResult.Unhandled -> {
                 commitComposingWord()
-                ic.commitText(c.toString(), 1)
+                commitTextAtCurrentSelection(ic, c.toString())
                 resetComposing()
             }
         }
@@ -283,6 +316,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleBackspace() {
         val ic = currentInputConnection ?: return
+        refreshInputSelection(ic)
 
         if (engine.isWordActive()) {
             val handled = engine.processBackspace()
@@ -311,22 +345,24 @@ class VietnameseInputMethodService : InputMethodService(),
         deleteSelectionAnchor = null
         deleteSelectionBounds = null
         fallbackShiftHeld = false
+        fallbackSelectionSteps = 0
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val surrounding = ic.getSurroundingText(10_000, 10_000, 0)
-            if (surrounding != null) {
-                val offset = surrounding.offset
-                deleteSelectionAnchor = offset + surrounding.selectionStart
-                deleteSelectionEnd = offset + surrounding.selectionEnd
-                deleteSelectionBounds = offset until (offset + surrounding.text.length + 1)
-                return
-            }
+        val extracted = getExtractedText(ic)
+        if (extracted != null &&
+            extracted.text != null &&
+            extracted.selectionStart >= 0 &&
+            extracted.selectionEnd >= 0
+        ) {
+            val offset = extracted.startOffset
+            deleteSelectionAnchor = offset + extracted.selectionStart
+            deleteSelectionEnd = offset + extracted.selectionEnd
+            deleteSelectionBounds = offset..(offset + extracted.text.length)
+            return
         }
-        if (deleteSelectionAnchor == null) {
-            fallbackShiftHeld = ic.sendKeyEvent(
-                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SHIFT_LEFT)
-            )
-        }
+
+        fallbackShiftHeld = ic.sendKeyEvent(
+            KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SHIFT_LEFT)
+        )
     }
 
     private fun moveDeleteSelection(step: Int) {
@@ -335,12 +371,15 @@ class VietnameseInputMethodService : InputMethodService(),
         if (anchor != null) {
             val bounds = deleteSelectionBounds ?: return
             deleteSelectionEnd = (deleteSelectionEnd + step)
-                .coerceIn(anchor, bounds.last)
-            if (!ic.setSelection(anchor, deleteSelectionEnd)) {
+                .coerceIn(bounds.first, bounds.last)
+            val selectionStart = minOf(anchor, deleteSelectionEnd)
+            val selectionEnd = maxOf(anchor, deleteSelectionEnd)
+            if (!ic.setSelection(selectionStart, selectionEnd)) {
                 Log.w(TAG, "Input connection rejected swipe-delete selection update")
             }
         } else if (fallbackShiftHeld) {
             sendSelectionArrow(ic, if (step > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT)
+            fallbackSelectionSteps += step
         }
     }
 
@@ -349,14 +388,20 @@ class VietnameseInputMethodService : InputMethodService(),
         if (fallbackShiftHeld) {
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SHIFT_LEFT))
         }
-        val hasSelection = deleteSelectionAnchor?.let { it != deleteSelectionEnd } ?: fallbackShiftHeld
+        val hasSelection = deleteSelectionAnchor?.let { it != deleteSelectionEnd }
+            ?: (fallbackShiftHeld && fallbackSelectionSteps != 0)
         if (hasSelection) {
-            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+            val downSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+            val upSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+            if (!downSent || !upSent) {
+                Log.w(TAG, "Input connection rejected swipe-delete key event")
+            }
             updateSuggestions("")
         }
         deleteSelectionAnchor = null
         deleteSelectionBounds = null
         fallbackShiftHeld = false
+        fallbackSelectionSteps = 0
     }
 
     private fun sendSelectionArrow(ic: android.view.inputmethod.InputConnection, keyCode: Int) {
@@ -367,44 +412,22 @@ class VietnameseInputMethodService : InputMethodService(),
     private fun moveCursorByTouchpad(horizontalSteps: Int, verticalSteps: Int) {
         commitComposingWord()
         val ic = currentInputConnection ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val surrounding = ic.getSurroundingText(10_000, 10_000, 0)
-            if (surrounding != null) {
-                val text = surrounding.text
-                val offset = surrounding.offset
-                var position = (surrounding.selectionEnd).coerceIn(0, text.length)
-                repeat(kotlin.math.abs(horizontalSteps)) {
-                    position = (position + if (horizontalSteps > 0) 1 else -1)
-                        .coerceIn(0, text.length)
-                }
-                repeat(kotlin.math.abs(verticalSteps)) {
-                    val previousBreak = text.lastIndexOf('\n', position - 1)
-                    val lineStart = previousBreak + 1
-                    val column = position - lineStart
-                    if (verticalSteps < 0) {
-                        if (previousBreak >= 0) {
-                            val priorBreak = text.lastIndexOf('\n', previousBreak - 1)
-                            position = (priorBreak + 1 + column).coerceAtMost(previousBreak)
-                        } else {
-                            position = (position - 20).coerceAtLeast(0)
-                        }
-                    } else {
-                        val nextBreak = text.indexOf('\n', position)
-                        if (nextBreak >= 0) {
-                            val nextLineEnd = text.indexOf('\n', nextBreak + 1)
-                                .let { if (it < 0) text.length else it }
-                            position = (nextBreak + 1 + column).coerceAtMost(nextLineEnd)
-                        } else {
-                            position = (position + 20).coerceAtMost(text.length)
-                        }
-                    }
-                }
-                val absolutePosition = offset + position
-                if (!ic.setSelection(absolutePosition, absolutePosition)) {
-                    Log.w(TAG, "Input connection rejected touchpad cursor update")
-                }
-                return
+        val extracted = getExtractedText(ic)
+        val text = extracted?.text
+        if (extracted != null && text != null &&
+            extracted.selectionEnd >= 0
+        ) {
+            val localPosition = CursorMovement.move(
+                text = text,
+                currentPosition = extracted.selectionEnd,
+                horizontalSteps = horizontalSteps,
+                verticalSteps = verticalSteps
+            )
+            val absolutePosition = extracted.startOffset + localPosition
+            if (!ic.setSelection(absolutePosition, absolutePosition)) {
+                Log.w(TAG, "Input connection rejected touchpad cursor update")
             }
+            return
         }
 
         repeat(kotlin.math.abs(horizontalSteps)) {
@@ -423,11 +446,11 @@ class VietnameseInputMethodService : InputMethodService(),
         val ic = currentInputConnection ?: return
         if (engine.isWordActive()) {
             val finalWord = engine.composedWord
-            ic.commitText("$finalWord ", 1)
+            commitTextAtCurrentSelection(ic, "$finalWord ")
             lastCommittedWord = finalWord
             resetComposing()
         } else {
-            ic.commitText(" ", 1)
+            commitTextAtCurrentSelection(ic, " ")
             updateSuggestions("")
         }
     }
@@ -448,7 +471,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleSelectSuggestion(suggestion: String) {
         val ic = currentInputConnection ?: return
-        ic.commitText("$suggestion ", 1)
+        commitTextAtCurrentSelection(ic, "$suggestion ")
         lastCommittedWord = suggestion
         resetComposing()
     }
@@ -457,10 +480,40 @@ class VietnameseInputMethodService : InputMethodService(),
         val ic = currentInputConnection ?: return
         if (engine.isWordActive()) {
             val word = engine.composedWord
-            ic.commitText(word, 1)
+            commitTextAtCurrentSelection(ic, word)
             lastCommittedWord = word
             resetComposing()
         }
+    }
+
+    private fun refreshInputSelection(
+        ic: android.view.inputmethod.InputConnection
+    ) {
+        val extracted = getExtractedText(ic) ?: return
+        if (extracted.selectionStart < 0 || extracted.selectionEnd < 0) return
+        val selectionStart = extracted.startOffset + extracted.selectionStart
+        val selectionEnd = extracted.startOffset + extracted.selectionEnd
+        if (!ic.setSelection(selectionStart, selectionEnd)) {
+            Log.w(TAG, "Input connection rejected refreshed selection")
+        }
+    }
+
+    private fun commitTextAtCurrentSelection(
+        ic: android.view.inputmethod.InputConnection,
+        text: CharSequence
+    ) {
+        refreshInputSelection(ic)
+        ic.commitText(text, 1)
+    }
+
+    private fun getExtractedText(
+        ic: android.view.inputmethod.InputConnection
+    ): ExtractedText? {
+        val request = ExtractedTextRequest().apply {
+            hintMaxChars = 20_000
+            hintMaxLines = 1_000
+        }
+        return ic.getExtractedText(request, 0)
     }
 
     private fun resetComposing() {

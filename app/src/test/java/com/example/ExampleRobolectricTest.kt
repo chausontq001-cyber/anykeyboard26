@@ -8,6 +8,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ApplicationProvider
 import com.example.ime.ImeStatus
 import com.example.ime.NavigationBarPolicy
+import com.example.ime.CursorMovement
 import com.example.ime.service.VietnameseInputMethodService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +21,27 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class ExampleRobolectricTest {
+
+  @Test
+  fun `touchpad cursor moves in both horizontal directions without crossing text bounds`() {
+    val text = "hello"
+
+    assertEquals(4, CursorMovement.move(text, 2, 2, 0))
+    assertEquals(1, CursorMovement.move(text, 2, -1, 0))
+    assertEquals(0, CursorMovement.move(text, 2, -20, 0))
+    assertEquals(text.length, CursorMovement.move(text, 2, 20, 0))
+  }
+
+  @Test
+  fun `touchpad cursor keeps its column when moving between lines`() {
+    val text = "abcdef\nxy\n123456"
+
+    assertEquals(9, CursorMovement.move(text, 5, 0, 1))
+    assertEquals(12, CursorMovement.move(text, 9, 0, 1))
+    assertEquals(9, CursorMovement.move(text, 12, 0, -1))
+    assertEquals(2, CursorMovement.move(text, 9, 0, -1))
+    assertEquals(15, CursorMovement.move(text, 5, 0, 2))
+  }
 
   @Test
   fun `read string from context`() {

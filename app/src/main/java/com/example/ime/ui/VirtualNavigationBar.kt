@@ -53,6 +53,7 @@ fun VirtualNavigationBar(
     if (!settings.showVirtualNavBar) return
 
     val heightDp = settings.bottomChinHeightDp.dp
+    val buttonSize = (heightDp - 4.dp).coerceIn(24.dp, 40.dp)
 
     Box(
         modifier = modifier
@@ -73,6 +74,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Đầu dòng",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_first_page",
+                    buttonSize = buttonSize,
                     onClick = onMoveCursorStart
                 )
             }
@@ -83,6 +85,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Sang trái",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_cursor_left",
+                    buttonSize = buttonSize,
                     onClick = onMoveCursorLeft
                 )
             }
@@ -94,6 +97,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Chọn tất cả",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_select_all",
+                    buttonSize = buttonSize,
                     onClick = onSelectAll
                 )
             }
@@ -104,6 +108,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Dán",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_paste",
+                    buttonSize = buttonSize,
                     onClick = onPaste
                 )
             }
@@ -114,6 +119,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Sang phải",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_cursor_right",
+                    buttonSize = buttonSize,
                     onClick = onMoveCursorRight
                 )
             }
@@ -124,6 +130,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Cuối dòng",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_last_page",
+                    buttonSize = buttonSize,
                     onClick = onMoveCursorEnd
                 )
             }
@@ -133,6 +140,7 @@ fun VirtualNavigationBar(
                 contentDescription = "Chuyển bàn phím",
                 colorScheme = colorScheme,
                 testTag = "nav_btn_switch_ime",
+                buttonSize = buttonSize,
                 onClick = onSwitchIme
             )
 
@@ -142,6 +150,7 @@ fun VirtualNavigationBar(
                     contentDescription = "Thu bàn phím",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_hide_keyboard",
+                    buttonSize = buttonSize,
                     onClick = onHideKeyboard
                 )
             }
@@ -155,11 +164,12 @@ private fun NavBarIconButton(
     contentDescription: String,
     colorScheme: KeyboardColorScheme,
     testTag: String,
+    buttonSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(buttonSize)
             .clip(RoundedCornerShape(8.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -172,7 +182,7 @@ private fun NavBarIconButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = colorScheme.navBarIconColor,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(buttonSize * 0.5f)
         )
     }
 }

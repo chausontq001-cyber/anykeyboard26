@@ -19,11 +19,13 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -85,6 +87,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.min
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -178,13 +181,39 @@ fun ComposeKeyboardView(
         }
     }
 
-    val baseKeyHeight = (46 * (settings.keyboardHeightPercent / 100f) * (settings.keyScalePercent / 100f)).dp
+    val preferredKeyHeight =
+        (46 * (settings.keyboardHeightPercent / 100f) * (settings.keyScalePercent / 100f)).dp
     val fontScale = (settings.fontScalePercent / 100f) * (settings.keyScalePercent / 100f)
 
-    // Container for Floating vs Standard/Docked vs Split
-    if (isFloating) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val isEmojiLayout = layoutMode == KeyboardLayoutMode.EMOJI
+        val keyboardRows = when {
+            isEmojiLayout -> 4.4f
+            layoutMode == KeyboardLayoutMode.ALPHA && settings.showNumberRow -> 4.8f
+            else -> 4f
+        }
+        val reservedHeight =
+            (if (settings.showSuggestions || composingWord.isNotEmpty()) 42.dp else 0.dp) +
+                (if (settings.showVirtualNavBar && !hideVirtualNavigationBar) {
+                    settings.bottomChinHeightDp.dp
+                } else {
+                    0.dp
+                }) +
+                (if (isEmojiLayout) 30.dp else 0.dp) +
+                (if (isFloating) 40.dp else 0.dp) +
+                18.dp
+        val availableKeyHeight = if (constraints.hasBoundedHeight) {
+            ((maxHeight - reservedHeight) / keyboardRows).coerceAtLeast(24.dp)
+        } else {
+            preferredKeyHeight
+        }
+        val baseKeyHeight = min(preferredKeyHeight.value, availableKeyHeight.value).dp
+        val responsiveFontScale = fontScale * (baseKeyHeight / preferredKeyHeight)
+
+        // Container for Floating vs Standard/Docked vs Split
+        if (isFloating) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp),
             contentAlignment = Alignment.BottomCenter
@@ -254,7 +283,7 @@ fun ComposeKeyboardView(
                         suggestions = suggestions,
                         colorScheme = colorScheme,
                         baseKeyHeight = baseKeyHeight * 0.9f,
-                        fontScale = fontScale * 0.92f,
+                        fontScale = responsiveFontScale * 0.92f,
                         layoutMode = layoutMode,
                         shiftState = shiftState,
                         triggerHaptic = { triggerHaptic() },
@@ -299,7 +328,7 @@ fun ComposeKeyboardView(
     } else {
         // Docked or Split Keyboard
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .background(colorScheme.backgroundColor)
                 .testTag("compose_keyboard_root")
@@ -311,7 +340,7 @@ fun ComposeKeyboardView(
                 suggestions = suggestions,
                 colorScheme = colorScheme,
                 baseKeyHeight = baseKeyHeight,
-                fontScale = fontScale,
+                fontScale = responsiveFontScale,
                 layoutMode = layoutMode,
                 shiftState = shiftState,
                 triggerHaptic = { triggerHaptic() },
@@ -350,6 +379,7 @@ fun ComposeKeyboardView(
                 onOpenSettings = onOpenSettings,
                 hideVirtualNavigationBar = hideVirtualNavigationBar
             )
+            }
         }
     }
 }
@@ -459,6 +489,7 @@ private fun KeyboardContentWrapper(
 
             OneHandedSidebar(
                 colorScheme = colorScheme,
+                keyHeight = baseKeyHeight,
                 onExpand = { onUpdateAlignment(KeyboardAlignment.CENTER) },
                 onFlipSide = { onUpdateAlignment(KeyboardAlignment.RIGHT) },
                 onOpenSettings = onOpenSettings,
@@ -467,6 +498,7 @@ private fun KeyboardContentWrapper(
         } else if (!isSplit && settings.alignment == KeyboardAlignment.RIGHT) {
             OneHandedSidebar(
                 colorScheme = colorScheme,
+                keyHeight = baseKeyHeight,
                 onExpand = { onUpdateAlignment(KeyboardAlignment.CENTER) },
                 onFlipSide = { onUpdateAlignment(KeyboardAlignment.LEFT) },
                 onOpenSettings = onOpenSettings,
@@ -894,7 +926,7 @@ private fun KeyboardMainContent(
 
                     // Emojis Grid for selected category
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(8),
+                        columns = GridCells.Adaptive(minSize = 32.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(baseKeyHeight * 3.4f)
@@ -905,14 +937,14 @@ private fun KeyboardMainContent(
                         items(currentCategory.emojis) { emoji ->
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .fillMaxSize()
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         emoji.forEach { c -> onKeyTyped(c) }
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(text = emoji, fontSize = 22.sp)
+                                Text(text = emoji, fontSize = (22 * fontScale).sp)
                             }
                         }
                     }
@@ -1109,7 +1141,7 @@ private fun RowScope.BackspaceGestureKeyCap(
 
                                 if (abs(totalDragX) > 8f) repeatJob.cancel()
 
-                                if (enableSwipeDelete && !didSelect && totalDragX > 25f) {
+                                if (enableSwipeDelete && !didSelect && abs(totalDragX) > 25f) {
                                     didSelect = true
                                     isSwiping = true
                                     repeatJob.cancel()
@@ -1185,7 +1217,9 @@ private fun RowScope.SpaceGestureKeyCap(
     var hasMovedCursorEarly by remember { mutableStateOf(false) }
     var touchpadActive by remember { mutableStateOf(false) }
     var touchpadPosition by remember { mutableStateOf(Offset.Zero) }
-    val cursorStepPx = with(LocalDensity.current) { 18.dp.toPx() }
+    val cursorStepPx = with(LocalDensity.current) {
+        (height * 0.4f).toPx().coerceAtLeast(12.dp.toPx())
+    }
 
     Box(
         modifier = Modifier
@@ -1203,8 +1237,9 @@ private fun RowScope.SpaceGestureKeyCap(
                         var lastX = down.position.x
                         var lastY = down.position.y
                         var totalDragX = 0f
-                        var cursorStepDragX = 0f
-                        var cursorStepDragY = 0f
+                        var totalDragY = 0f
+                        var emittedCursorStepsX = 0
+                        var emittedCursorStepsY = 0
                         var didMoveCursor = false
                         var didSwitchLanguage = false
                         var didTouchpadGesture = false
@@ -1231,6 +1266,7 @@ private fun RowScope.SpaceGestureKeyCap(
                                 lastX = change.position.x
                                 lastY = change.position.y
                                 totalDragX += dragX
+                                totalDragY += dragY
                                 val duration = System.currentTimeMillis() - pressStartTime
 
                                 if (isLongPressLanguageSwitch && !didSwitchLanguage) {
@@ -1244,26 +1280,14 @@ private fun RowScope.SpaceGestureKeyCap(
                                         touchpadActive = true
                                         didTouchpadGesture = true
                                     }
-                                    cursorStepDragX += dragX
-                                    cursorStepDragY += dragY
-                                    while (cursorStepDragX >= cursorStepPx) {
-                                        onMoveCursorByTouchpad(1, 0)
-                                        cursorStepDragX -= cursorStepPx
-                                        didMoveCursor = true
-                                    }
-                                    while (cursorStepDragX <= -cursorStepPx) {
-                                        onMoveCursorByTouchpad(-1, 0)
-                                        cursorStepDragX += cursorStepPx
-                                        didMoveCursor = true
-                                    }
-                                    while (cursorStepDragY >= cursorStepPx) {
-                                        onMoveCursorByTouchpad(0, 1)
-                                        cursorStepDragY -= cursorStepPx
-                                        didMoveCursor = true
-                                    }
-                                    while (cursorStepDragY <= -cursorStepPx) {
-                                        onMoveCursorByTouchpad(0, -1)
-                                        cursorStepDragY += cursorStepPx
+                                    val targetStepsX = (totalDragX / cursorStepPx).toInt()
+                                    val targetStepsY = (totalDragY / cursorStepPx).toInt()
+                                    val stepsX = targetStepsX - emittedCursorStepsX
+                                    val stepsY = targetStepsY - emittedCursorStepsY
+                                    if (stepsX != 0 || stepsY != 0) {
+                                        onMoveCursorByTouchpad(stepsX, stepsY)
+                                        emittedCursorStepsX = targetStepsX
+                                        emittedCursorStepsY = targetStepsY
                                         didMoveCursor = true
                                     }
                                     if (didMoveCursor && duration < 700) hasMovedCursorEarly = true
@@ -1279,7 +1303,7 @@ private fun RowScope.SpaceGestureKeyCap(
                         }
 
                         if (!didMoveCursor && !didSwitchLanguage && !didTouchpadGesture && !didLongPress &&
-                            abs(totalDragX) < cursorStepPx
+                            abs(totalDragX) < cursorStepPx && abs(totalDragY) < cursorStepPx
                         ) onClick()
                     }
                 }
@@ -1351,22 +1375,24 @@ private fun RowScope.SpaceGestureKeyCap(
 @Composable
 private fun RowScope.OneHandedSidebar(
     colorScheme: KeyboardColorScheme,
+    keyHeight: Dp,
     onExpand: () -> Unit,
     onFlipSide: () -> Unit,
     onOpenSettings: () -> Unit,
     isRightSidebar: Boolean
 ) {
+    val buttonSize = keyHeight.coerceAtLeast(24.dp)
     Column(
         modifier = Modifier
             .weight(0.15f)
             .fillMaxHeight()
             .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy((keyHeight * 0.15f).coerceAtMost(8.dp))
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+            .size(buttonSize)
                 .clip(RoundedCornerShape(8.dp))
                 .background(colorScheme.specialKeyColor)
                 .clickable { onExpand() }
@@ -1377,13 +1403,13 @@ private fun RowScope.OneHandedSidebar(
                 imageVector = Icons.Default.Fullscreen,
                 contentDescription = "Toàn màn hình",
                 tint = colorScheme.secondaryTextColor,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(buttonSize * 0.52f)
             )
         }
 
         Box(
             modifier = Modifier
-                .size(38.dp)
+            .size(buttonSize)
                 .clip(RoundedCornerShape(8.dp))
                 .background(colorScheme.specialKeyColor)
                 .clickable { onFlipSide() }
@@ -1394,13 +1420,13 @@ private fun RowScope.OneHandedSidebar(
                 imageVector = if (isRightSidebar) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
                 contentDescription = "Đổi tay",
                 tint = colorScheme.secondaryTextColor,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(buttonSize * 0.52f)
             )
         }
 
         Box(
             modifier = Modifier
-                .size(38.dp)
+            .size(buttonSize)
                 .clip(RoundedCornerShape(8.dp))
                 .background(colorScheme.specialKeyColor)
                 .clickable { onOpenSettings() }
@@ -1411,7 +1437,7 @@ private fun RowScope.OneHandedSidebar(
                 imageVector = Icons.Default.Settings,
                 contentDescription = "Cài đặt",
                 tint = colorScheme.secondaryTextColor,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(buttonSize * 0.52f)
             )
         }
     }

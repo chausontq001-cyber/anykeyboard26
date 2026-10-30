@@ -36,6 +36,7 @@ import com.example.ime.ImeStatus
 import com.example.ime.model.KeyboardPreferences
 import com.example.ui.screens.AppearanceScreen
 import com.example.ui.screens.EngineSettingsScreen
+import com.example.ui.screens.ImeActivationScreen
 import com.example.ui.screens.LanguagesScreen
 import com.example.ui.screens.SandboxScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         preferences = KeyboardPreferences.getInstance(this)
+        refreshImeStatus()
 
         setContent {
             MyApplicationTheme {
@@ -67,66 +69,65 @@ class MainActivity : ComponentActivity() {
                 val imeDefault by isImeDefault
 
                 LaunchedEffect(imeEnabled) {
-                    if (!imeEnabled) selectedTab = 0
+                    selectedTab = 0
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        CenterAlignedTopAppBar(
-                            title = {
-                                Text(
-                                    text = "AnyKeyboard26",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleMedium
+                if (!imeEnabled) {
+                    ImeActivationScreen()
+                } else {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = "AnyKeyboard26",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                },
+                                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
                                 )
-                            },
-                            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface
                             )
-                        )
-                    },
-                    bottomBar = {
-                        NavigationBar(
-                            modifier = Modifier.testTag("main_bottom_nav"),
-                            tonalElevation = 6.dp
+                        },
+                        bottomBar = {
+                            NavigationBar(
+                                modifier = Modifier.testTag("main_bottom_nav"),
+                                tonalElevation = 6.dp
+                            ) {
+                                NavTab.values().forEachIndexed { index, tab ->
+                                    NavigationBarItem(
+                                        selected = selectedTab == index,
+                                        onClick = { selectedTab = index },
+                                        icon = {
+                                            Icon(imageVector = tab.icon, contentDescription = tab.title)
+                                        },
+                                        label = { Text(text = tab.title) },
+                                        modifier = Modifier.testTag(tab.tag)
+                                    )
+                                }
+                            }
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
                         ) {
-                            NavTab.values().forEachIndexed { index, tab ->
-                                NavigationBarItem(
-                                    selected = selectedTab == index,
-                                    enabled = index == 0 || imeEnabled,
-                                    onClick = {
-                                        if (index == 0 || imeEnabled) selectedTab = index
-                                    },
-                                    icon = {
-                                        Icon(imageVector = tab.icon, contentDescription = tab.title)
-                                    },
-                                    label = { Text(text = tab.title) },
-                                    modifier = Modifier.testTag(tab.tag)
+                            when (selectedTab) {
+                                0 -> SandboxScreen(
+                                    preferences = preferences,
+                                    onNavigateToSettings = { selectedTab = 1 },
+                                    isImeDefault = imeDefault
                                 )
+                                1 -> AppearanceScreen(preferences = preferences)
+                                2 -> EngineSettingsScreen(preferences = preferences)
+                                3 -> LanguagesScreen(preferences = preferences)
                             }
                         }
                     }
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        when (if (imeEnabled) selectedTab else 0) {
-                            0 -> SandboxScreen(
-                                preferences = preferences,
-                                onNavigateToSettings = { if (imeEnabled) selectedTab = 1 },
-                                isImeEnabled = imeEnabled,
-                                isImeDefault = imeDefault
-                            )
-                            1 -> AppearanceScreen(preferences = preferences)
-                            2 -> EngineSettingsScreen(preferences = preferences)
-                            3 -> LanguagesScreen(preferences = preferences)
-                        }
-                    }
                 }
-
             }
         }
     }
