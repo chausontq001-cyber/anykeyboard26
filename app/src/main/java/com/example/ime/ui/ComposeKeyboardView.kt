@@ -7,6 +7,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -69,11 +70,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -115,12 +120,15 @@ fun ComposeKeyboardView(
     suggestions: List<String>,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
-    onFastDelete: () -> Unit,
+    onStartDeleteSelection: () -> Unit,
+    onMoveDeleteSelection: (Int) -> Unit,
+    onFinishDeleteSelection: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onSelectSuggestion: (String) -> Unit,
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
+    onMoveCursorByTouchpad: (Int, Int) -> Unit,
     onMoveCursorStart: () -> Unit,
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
@@ -131,6 +139,7 @@ fun ComposeKeyboardView(
     onToggleTypingMethod: () -> Unit,
     onUpdateAlignment: (KeyboardAlignment) -> Unit,
     onOpenSettings: () -> Unit,
+    hideVirtualNavigationBar: Boolean = false,
     onUpdateDisplayStyle: ((KeyboardDisplayStyle) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -251,12 +260,15 @@ fun ComposeKeyboardView(
                         triggerHaptic = { triggerHaptic() },
                         onKeyTyped = onKeyTyped,
                         onBackspace = onBackspace,
-                        onFastDelete = onFastDelete,
+                        onStartDeleteSelection = onStartDeleteSelection,
+                        onMoveDeleteSelection = onMoveDeleteSelection,
+                        onFinishDeleteSelection = onFinishDeleteSelection,
                         onSpace = onSpace,
                         onEnter = onEnter,
                         onSelectSuggestion = onSelectSuggestion,
                         onMoveCursorLeft = onMoveCursorLeft,
                         onMoveCursorRight = onMoveCursorRight,
+                        onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                         onMoveCursorStart = onMoveCursorStart,
                         onMoveCursorEnd = onMoveCursorEnd,
                         onSelectAll = onSelectAll,
@@ -278,7 +290,8 @@ fun ComposeKeyboardView(
                         },
                         onToggleTypingMethod = onToggleTypingMethod,
                         onUpdateAlignment = onUpdateAlignment,
-                        onOpenSettings = onOpenSettings
+                        onOpenSettings = onOpenSettings,
+                        hideVirtualNavigationBar = hideVirtualNavigationBar
                     )
                 }
             }
@@ -304,12 +317,15 @@ fun ComposeKeyboardView(
                 triggerHaptic = { triggerHaptic() },
                 onKeyTyped = onKeyTyped,
                 onBackspace = onBackspace,
-                onFastDelete = onFastDelete,
+                onStartDeleteSelection = onStartDeleteSelection,
+                onMoveDeleteSelection = onMoveDeleteSelection,
+                onFinishDeleteSelection = onFinishDeleteSelection,
                 onSpace = onSpace,
                 onEnter = onEnter,
                 onSelectSuggestion = onSelectSuggestion,
                 onMoveCursorLeft = onMoveCursorLeft,
                 onMoveCursorRight = onMoveCursorRight,
+                onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                 onMoveCursorStart = onMoveCursorStart,
                 onMoveCursorEnd = onMoveCursorEnd,
                 onSelectAll = onSelectAll,
@@ -331,7 +347,8 @@ fun ComposeKeyboardView(
                 },
                 onToggleTypingMethod = onToggleTypingMethod,
                 onUpdateAlignment = onUpdateAlignment,
-                onOpenSettings = onOpenSettings
+                onOpenSettings = onOpenSettings,
+                hideVirtualNavigationBar = hideVirtualNavigationBar
             )
         }
     }
@@ -351,12 +368,15 @@ private fun KeyboardContentWrapper(
     triggerHaptic: () -> Unit,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
-    onFastDelete: () -> Unit,
+    onStartDeleteSelection: () -> Unit,
+    onMoveDeleteSelection: (Int) -> Unit,
+    onFinishDeleteSelection: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onSelectSuggestion: (String) -> Unit,
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
+    onMoveCursorByTouchpad: (Int, Int) -> Unit,
     onMoveCursorStart: () -> Unit,
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
@@ -368,7 +388,8 @@ private fun KeyboardContentWrapper(
     onSwitchLayout: (KeyboardLayoutMode) -> Unit,
     onToggleTypingMethod: () -> Unit,
     onUpdateAlignment: (KeyboardAlignment) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    hideVirtualNavigationBar: Boolean
 ) {
     // 1. Suggestion Bar
     if (settings.showSuggestions || composingWord.isNotEmpty()) {
@@ -409,10 +430,12 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onBackspace()
                     },
-                    onFastDelete = {
+                    onStartDeleteSelection = {
                         triggerHaptic()
-                        onFastDelete()
+                        onStartDeleteSelection()
                     },
+                    onMoveDeleteSelection = onMoveDeleteSelection,
+                    onFinishDeleteSelection = onFinishDeleteSelection,
                     onSpace = {
                         triggerHaptic()
                         onSpace()
@@ -423,6 +446,7 @@ private fun KeyboardContentWrapper(
                     },
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
+                    onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -466,10 +490,12 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onBackspace()
                     },
-                    onFastDelete = {
+                    onStartDeleteSelection = {
                         triggerHaptic()
-                        onFastDelete()
+                        onStartDeleteSelection()
                     },
+                    onMoveDeleteSelection = onMoveDeleteSelection,
+                    onFinishDeleteSelection = onFinishDeleteSelection,
                     onSpace = {
                         triggerHaptic()
                         onSpace()
@@ -480,6 +506,7 @@ private fun KeyboardContentWrapper(
                     },
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
+                    onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -508,10 +535,12 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onBackspace()
                     },
-                    onFastDelete = {
+                    onStartDeleteSelection = {
                         triggerHaptic()
-                        onFastDelete()
+                        onStartDeleteSelection()
                     },
+                    onMoveDeleteSelection = onMoveDeleteSelection,
+                    onFinishDeleteSelection = onFinishDeleteSelection,
                     onSpace = {
                         triggerHaptic()
                         onSpace()
@@ -522,6 +551,7 @@ private fun KeyboardContentWrapper(
                     },
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
+                    onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -535,7 +565,7 @@ private fun KeyboardContentWrapper(
     }
 
     // 3. Virtual Navigation Bar
-    if (settings.showVirtualNavBar) {
+    if (settings.showVirtualNavBar && !hideVirtualNavigationBar) {
         VirtualNavigationBar(
             settings = settings,
             colorScheme = colorScheme,
@@ -586,11 +616,14 @@ private fun KeyboardMainContent(
     fontScale: Float,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
-    onFastDelete: () -> Unit,
+    onStartDeleteSelection: () -> Unit,
+    onMoveDeleteSelection: (Int) -> Unit,
+    onFinishDeleteSelection: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
+    onMoveCursorByTouchpad: (Int, Int) -> Unit,
     onCycleLanguage: () -> Unit,
     onToggleShift: () -> Unit,
     onSwitchLayout: (KeyboardLayoutMode) -> Unit,
@@ -689,7 +722,9 @@ private fun KeyboardMainContent(
                             weight = 1.3f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
                             onClick = onBackspace,
-                            onFastDelete = onFastDelete
+                            onStartSelection = onStartDeleteSelection,
+                            onMoveSelection = onMoveDeleteSelection,
+                            onFinishSelection = onFinishDeleteSelection
                         )
                     }
 
@@ -701,7 +736,7 @@ private fun KeyboardMainContent(
                     ) {
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.2f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorLeft = onMoveCursorLeft, onMoveCursorRight = onMoveCursorRight, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
 
                         // Center Gap with Quick Cursor Arrows in Split mode
                         Row(modifier = Modifier.weight(1.6f), horizontalArrangement = Arrangement.Center) {
@@ -710,7 +745,7 @@ private fun KeyboardMainContent(
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Phải", tint = colorScheme.secondaryTextColor, modifier = Modifier.size(20.dp).clickable { onMoveCursorRight() })
                         }
 
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorLeft = onMoveCursorLeft, onMoveCursorRight = onMoveCursorRight, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
                         KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, onClick = { onKeyTyped('.') })
                         SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.2f, onClick = onEnter)
                     }
@@ -747,13 +782,13 @@ private fun KeyboardMainContent(
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
-                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onFastDelete = onFastDelete)
+                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorLeft = onMoveCursorLeft, onMoveCursorRight = onMoveCursorRight, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
                         KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped('.') })
                         SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                     }
@@ -780,13 +815,13 @@ private fun KeyboardMainContent(
                     listOf("*", "\"", "'", ":", ";", "!", "?").forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onFastDelete = onFastDelete)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
                     SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorLeft = onMoveCursorLeft, onMoveCursorRight = onMoveCursorRight, onCycleLanguage = onCycleLanguage)
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
                     KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(',') })
                     SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
@@ -812,13 +847,13 @@ private fun KeyboardMainContent(
                     listOf("%", "_", "<", ">", "[", "]", "§").forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onFastDelete = onFastDelete)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
                     SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorLeft = onMoveCursorLeft, onMoveCursorRight = onMoveCursorRight, onCycleLanguage = onCycleLanguage)
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
                     KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped('.') })
                     SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
@@ -903,8 +938,7 @@ private fun KeyboardMainContent(
                             height = baseKeyHeight,
                             weight = 5f,
                             onClick = onSpace,
-                            onMoveCursorLeft = onMoveCursorLeft,
-                            onMoveCursorRight = onMoveCursorRight,
+                            onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                             onCycleLanguage = onCycleLanguage
                         )
 
@@ -914,7 +948,9 @@ private fun KeyboardMainContent(
                             weight = 2f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
                             onClick = onBackspace,
-                            onFastDelete = onFastDelete
+                            onStartSelection = onStartDeleteSelection,
+                            onMoveSelection = onMoveDeleteSelection,
+                            onFinishSelection = onFinishDeleteSelection
                         )
                     }
                 }
@@ -1024,9 +1060,12 @@ private fun RowScope.BackspaceGestureKeyCap(
     weight: Float,
     enableSwipeDelete: Boolean,
     onClick: () -> Unit,
-    onFastDelete: () -> Unit
+    onStartSelection: () -> Unit,
+    onMoveSelection: (Int) -> Unit,
+    onFinishSelection: () -> Unit
 ) {
     var isSwiping by remember { mutableStateOf(false) }
+    val selectionStepPx = with(LocalDensity.current) { 18.dp.toPx() }
 
     Box(
         modifier = Modifier
@@ -1042,13 +1081,14 @@ private fun RowScope.BackspaceGestureKeyCap(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var lastX = down.position.x
                         var totalDragX = 0f
-                        var didSwipeDelete = false
+                        var selectionDragPx = 0f
+                        var didSelect = false
                         var wasLongPress = false
                         isSwiping = false
 
                         val repeatJob = launch {
-                            delay(viewConfiguration.longPressTimeoutMillis)
-                            if (!didSwipeDelete) {
+                            delay(viewConfiguration.longPressTimeoutMillis.toLong())
+                            if (!didSelect) {
                                 wasLongPress = true
                                 while (isActive) {
                                     onClick()
@@ -1064,24 +1104,42 @@ private fun RowScope.BackspaceGestureKeyCap(
                                 if (!change.pressed) break
 
                                 totalDragX += change.position.x - lastX
+                                val dragX = change.position.x - lastX
                                 lastX = change.position.x
 
-                                if (enableSwipeDelete && !didSwipeDelete && totalDragX > 25f) {
-                                    didSwipeDelete = true
+                                if (abs(totalDragX) > 8f) repeatJob.cancel()
+
+                                if (enableSwipeDelete && !didSelect && totalDragX > 25f) {
+                                    didSelect = true
                                     isSwiping = true
                                     repeatJob.cancel()
-                                    onFastDelete()
+                                    onStartSelection()
+                                    selectionDragPx = totalDragX
+                                } else if (didSelect) {
+                                    selectionDragPx += dragX
                                 }
-                                if (didSwipeDelete || abs(totalDragX) > 8f) {
+
+                                if (didSelect) {
+                                    while (selectionDragPx >= selectionStepPx) {
+                                        onMoveSelection(1)
+                                        selectionDragPx -= selectionStepPx
+                                    }
+                                    while (selectionDragPx <= -selectionStepPx) {
+                                        onMoveSelection(-1)
+                                        selectionDragPx += selectionStepPx
+                                    }
+                                }
+                                if (didSelect || abs(totalDragX) > 8f) {
                                     change.consume()
                                 }
                             }
                         } finally {
                             repeatJob.cancel()
+                            if (didSelect) onFinishSelection()
                             isSwiping = false
                         }
 
-                        if (!didSwipeDelete && !wasLongPress && abs(totalDragX) < 15f) onClick()
+                        if (!didSelect && !wasLongPress && abs(totalDragX) < 15f) onClick()
                     }
                 }
             }
@@ -1104,8 +1162,7 @@ private fun RowScope.SpaceGestureKeyCap(
     height: Dp,
     weight: Float,
     onClick: () -> Unit,
-    onMoveCursorLeft: () -> Unit,
-    onMoveCursorRight: () -> Unit,
+    onMoveCursorByTouchpad: (Int, Int) -> Unit,
     onCycleLanguage: () -> Unit
 ) {
     val langPack = remember(settings.activeLanguageId) {
@@ -1126,6 +1183,9 @@ private fun RowScope.SpaceGestureKeyCap(
 
     var isLongPressLanguageSwitch by remember { mutableStateOf(false) }
     var hasMovedCursorEarly by remember { mutableStateOf(false) }
+    var touchpadActive by remember { mutableStateOf(false) }
+    var touchpadPosition by remember { mutableStateOf(Offset.Zero) }
+    val cursorStepPx = with(LocalDensity.current) { 18.dp.toPx() }
 
     Box(
         modifier = Modifier
@@ -1141,10 +1201,14 @@ private fun RowScope.SpaceGestureKeyCap(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val pressStartTime = System.currentTimeMillis()
                         var lastX = down.position.x
+                        var lastY = down.position.y
                         var totalDragX = 0f
-                        var cursorStepDrag = 0f
+                        var cursorStepDragX = 0f
+                        var cursorStepDragY = 0f
                         var didMoveCursor = false
                         var didSwitchLanguage = false
+                        var didTouchpadGesture = false
+                        var didLongPress = false
                         isLongPressLanguageSwitch = false
                         hasMovedCursorEarly = false
 
@@ -1152,6 +1216,7 @@ private fun RowScope.SpaceGestureKeyCap(
                             delay(700)
                             if (settings.holdSpaceToSwitchLanguage && !hasMovedCursorEarly) {
                                 isLongPressLanguageSwitch = true
+                                didLongPress = true
                             }
                         }
 
@@ -1162,7 +1227,9 @@ private fun RowScope.SpaceGestureKeyCap(
                                 if (!change.pressed) break
 
                                 val dragX = change.position.x - lastX
+                                val dragY = change.position.y - lastY
                                 lastX = change.position.x
+                                lastY = change.position.y
                                 totalDragX += dragX
                                 val duration = System.currentTimeMillis() - pressStartTime
 
@@ -1172,29 +1239,48 @@ private fun RowScope.SpaceGestureKeyCap(
                                         didSwitchLanguage = true
                                     }
                                 } else if (!isLongPressLanguageSwitch && settings.swipeSpaceToMoveCursor) {
-                                    cursorStepDrag += dragX
-                                    if (cursorStepDrag > 18f) {
-                                        onMoveCursorRight()
-                                        cursorStepDrag = 0f
-                                        didMoveCursor = true
-                                        if (duration < 700) hasMovedCursorEarly = true
-                                    } else if (cursorStepDrag < -18f) {
-                                        onMoveCursorLeft()
-                                        cursorStepDrag = 0f
-                                        didMoveCursor = true
-                                        if (duration < 700) hasMovedCursorEarly = true
+                                    touchpadPosition = change.position
+                                    if (abs(change.position.x - down.position.x) + abs(change.position.y - down.position.y) > 8f) {
+                                        touchpadActive = true
+                                        didTouchpadGesture = true
                                     }
+                                    cursorStepDragX += dragX
+                                    cursorStepDragY += dragY
+                                    while (cursorStepDragX >= cursorStepPx) {
+                                        onMoveCursorByTouchpad(1, 0)
+                                        cursorStepDragX -= cursorStepPx
+                                        didMoveCursor = true
+                                    }
+                                    while (cursorStepDragX <= -cursorStepPx) {
+                                        onMoveCursorByTouchpad(-1, 0)
+                                        cursorStepDragX += cursorStepPx
+                                        didMoveCursor = true
+                                    }
+                                    while (cursorStepDragY >= cursorStepPx) {
+                                        onMoveCursorByTouchpad(0, 1)
+                                        cursorStepDragY -= cursorStepPx
+                                        didMoveCursor = true
+                                    }
+                                    while (cursorStepDragY <= -cursorStepPx) {
+                                        onMoveCursorByTouchpad(0, -1)
+                                        cursorStepDragY += cursorStepPx
+                                        didMoveCursor = true
+                                    }
+                                    if (didMoveCursor && duration < 700) hasMovedCursorEarly = true
                                 }
 
-                                if (abs(dragX) > 2f || isLongPressLanguageSwitch) change.consume()
+                                if (abs(dragX) > 2f || abs(dragY) > 2f || isLongPressLanguageSwitch) change.consume()
                             }
                         } finally {
                             languageSwitchJob.cancel()
                             isLongPressLanguageSwitch = false
                             hasMovedCursorEarly = false
+                            touchpadActive = false
                         }
 
-                        if (!didMoveCursor && !didSwitchLanguage && abs(totalDragX) < 18f) onClick()
+                        if (!didMoveCursor && !didSwitchLanguage && !didTouchpadGesture && !didLongPress &&
+                            abs(totalDragX) < cursorStepPx
+                        ) onClick()
                     }
                 }
             }
@@ -1233,6 +1319,31 @@ private fun RowScope.SpaceGestureKeyCap(
                 tint = colorScheme.secondaryTextColor.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
             )
+        }
+        if (touchpadActive) {
+            Canvas(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            (touchpadPosition.x - 4.dp.toPx()).roundToInt(),
+                            (touchpadPosition.y - 4.dp.toPx()).roundToInt()
+                        )
+                    }
+                    .size(18.dp)
+            ) {
+                val pointer = Path().apply {
+                    moveTo(1f, 1f)
+                    lineTo(1f, 16f)
+                    lineTo(5f, 12f)
+                    lineTo(8f, 18f)
+                    lineTo(11f, 16.5f)
+                    lineTo(8f, 11f)
+                    lineTo(14f, 11f)
+                    close()
+                }
+                drawPath(pointer, Color.White)
+                drawPath(pointer, Color.Black, style = Stroke(width = 1.2f))
+            }
         }
     }
 }

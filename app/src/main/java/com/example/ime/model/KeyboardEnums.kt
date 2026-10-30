@@ -50,8 +50,3 @@ data class LanguagePack(
     val isEnabled: Boolean = false,
     val isDefault: Boolean = false
 )
-
-data class Shortcut(
-    val trigger: String,
-    val replacement: String
-)

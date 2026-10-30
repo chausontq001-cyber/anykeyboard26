@@ -14,6 +14,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
@@ -28,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.MainActivity
+import com.example.ime.NavigationBarPolicy
 import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.VietnameseEngine
 import com.example.ime.model.KeyboardPreferences
@@ -58,6 +61,11 @@ class VietnameseInputMethodService : InputMethodService(),
     private var composingWordState by mutableStateOf("")
     private var suggestionsState by mutableStateOf<List<String>>(emptyList())
     private var lastCommittedWord: String? = null
+    private var hideVirtualNavigationBarState by mutableStateOf(false)
+    private var deleteSelectionAnchor: Int? = null
+    private var deleteSelectionEnd = 0
+    private var deleteSelectionBounds: IntRange? = null
+    private var fallbackShiftHeld = false
 
     override fun onCreate() {
         super.onCreate()
@@ -91,6 +99,12 @@ class VietnameseInputMethodService : InputMethodService(),
         try {
             val win = window?.window ?: return
             val decorView = win.decorView ?: return
+            ViewCompat.setOnApplyWindowInsetsListener(decorView) { _, insets ->
+                hideVirtualNavigationBarState =
+                    NavigationBarPolicy.shouldHideVirtualNavigationBar(this, insets)
+                insets
+            }
+            ViewCompat.requestApplyInsets(decorView)
             decorView.setViewTreeLifecycleOwner(this)
             decorView.setViewTreeViewModelStoreOwner(this)
             decorView.setViewTreeSavedStateRegistryOwner(this)
@@ -137,12 +151,17 @@ class VietnameseInputMethodService : InputMethodService(),
                         suggestions = suggestionsState,
                         onKeyTyped = { c -> handleKeyTyped(c) },
                         onBackspace = { handleBackspace() },
-                        onFastDelete = { handleFastDelete() },
+                        onStartDeleteSelection = { beginDeleteSelection() },
+                        onMoveDeleteSelection = { moveDeleteSelection(it) },
+                        onFinishDeleteSelection = { finishDeleteSelection() },
                         onSpace = { handleSpace() },
                         onEnter = { handleEnter() },
                         onSelectSuggestion = { suggestion -> handleSelectSuggestion(suggestion) },
                         onMoveCursorLeft = { moveCursorLeft() },
                         onMoveCursorRight = { moveCursorRight() },
+                        onMoveCursorByTouchpad = { horizontal, vertical ->
+                            moveCursorByTouchpad(horizontal, vertical)
+                        },
                         onMoveCursorStart = { moveCursorStart() },
                         onMoveCursorEnd = { moveCursorEnd() },
                         onSelectAll = { selectAll() },
@@ -168,6 +187,7 @@ class VietnameseInputMethodService : InputMethodService(),
                             }
                             startActivity(intent)
                         },
+                        hideVirtualNavigationBar = hideVirtualNavigationBarState,
                         onUpdateDisplayStyle = { newStyle ->
                             preferences.updateSettings { it.copy(displayStyle = newStyle) }
                         }
@@ -230,6 +250,9 @@ class VietnameseInputMethodService : InputMethodService(),
         } catch (e: Exception) {
             Log.e(TAG, "Error onDestroy", e)
         }
+        if (::engine.isInitialized) {
+            engine.close()
+        }
         super.onDestroy()
     }
 
@@ -282,16 +305,118 @@ class VietnameseInputMethodService : InputMethodService(),
         }
     }
 
-    private fun handleFastDelete() {
+    private fun beginDeleteSelection() {
         val ic = currentInputConnection ?: return
-        if (engine.isWordActive()) {
-            engine.reset()
-            composingWordState = ""
-            ic.commitText("", 1)
-        } else {
-            ic.deleteSurroundingText(5, 0)
+        commitComposingWord()
+        deleteSelectionAnchor = null
+        deleteSelectionBounds = null
+        fallbackShiftHeld = false
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val surrounding = ic.getSurroundingText(10_000, 10_000, 0)
+            if (surrounding != null) {
+                val offset = surrounding.offset
+                deleteSelectionAnchor = offset + surrounding.selectionStart
+                deleteSelectionEnd = offset + surrounding.selectionEnd
+                deleteSelectionBounds = offset until (offset + surrounding.text.length + 1)
+                return
+            }
         }
-        updateSuggestions("")
+        if (deleteSelectionAnchor == null) {
+            fallbackShiftHeld = ic.sendKeyEvent(
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SHIFT_LEFT)
+            )
+        }
+    }
+
+    private fun moveDeleteSelection(step: Int) {
+        val ic = currentInputConnection ?: return
+        val anchor = deleteSelectionAnchor
+        if (anchor != null) {
+            val bounds = deleteSelectionBounds ?: return
+            deleteSelectionEnd = (deleteSelectionEnd + step)
+                .coerceIn(anchor, bounds.last)
+            if (!ic.setSelection(anchor, deleteSelectionEnd)) {
+                Log.w(TAG, "Input connection rejected swipe-delete selection update")
+            }
+        } else if (fallbackShiftHeld) {
+            sendSelectionArrow(ic, if (step > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT)
+        }
+    }
+
+    private fun finishDeleteSelection() {
+        val ic = currentInputConnection ?: return
+        if (fallbackShiftHeld) {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_SHIFT_LEFT))
+        }
+        val hasSelection = deleteSelectionAnchor?.let { it != deleteSelectionEnd } ?: fallbackShiftHeld
+        if (hasSelection) {
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+            updateSuggestions("")
+        }
+        deleteSelectionAnchor = null
+        deleteSelectionBounds = null
+        fallbackShiftHeld = false
+    }
+
+    private fun sendSelectionArrow(ic: android.view.inputmethod.InputConnection, keyCode: Int) {
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+    }
+
+    private fun moveCursorByTouchpad(horizontalSteps: Int, verticalSteps: Int) {
+        commitComposingWord()
+        val ic = currentInputConnection ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val surrounding = ic.getSurroundingText(10_000, 10_000, 0)
+            if (surrounding != null) {
+                val text = surrounding.text
+                val offset = surrounding.offset
+                var position = (surrounding.selectionEnd).coerceIn(0, text.length)
+                repeat(kotlin.math.abs(horizontalSteps)) {
+                    position = (position + if (horizontalSteps > 0) 1 else -1)
+                        .coerceIn(0, text.length)
+                }
+                repeat(kotlin.math.abs(verticalSteps)) {
+                    val previousBreak = text.lastIndexOf('\n', position - 1)
+                    val lineStart = previousBreak + 1
+                    val column = position - lineStart
+                    if (verticalSteps < 0) {
+                        if (previousBreak >= 0) {
+                            val priorBreak = text.lastIndexOf('\n', previousBreak - 1)
+                            position = (priorBreak + 1 + column).coerceAtMost(previousBreak)
+                        } else {
+                            position = (position - 20).coerceAtLeast(0)
+                        }
+                    } else {
+                        val nextBreak = text.indexOf('\n', position)
+                        if (nextBreak >= 0) {
+                            val nextLineEnd = text.indexOf('\n', nextBreak + 1)
+                                .let { if (it < 0) text.length else it }
+                            position = (nextBreak + 1 + column).coerceAtMost(nextLineEnd)
+                        } else {
+                            position = (position + 20).coerceAtMost(text.length)
+                        }
+                    }
+                }
+                val absolutePosition = offset + position
+                if (!ic.setSelection(absolutePosition, absolutePosition)) {
+                    Log.w(TAG, "Input connection rejected touchpad cursor update")
+                }
+                return
+            }
+        }
+
+        repeat(kotlin.math.abs(horizontalSteps)) {
+            sendDownUpKeyEvents(
+                if (horizontalSteps > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+            )
+        }
+        repeat(kotlin.math.abs(verticalSteps)) {
+            sendDownUpKeyEvents(
+                if (verticalSteps > 0) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP
+            )
+        }
     }
 
     private fun handleSpace() {

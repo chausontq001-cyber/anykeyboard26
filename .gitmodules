@@ -1,0 +1,3 @@
+[submodule "third_party/funput"]
+	path = third_party/funput
+	url = https://github.com/Funput/Funput.git

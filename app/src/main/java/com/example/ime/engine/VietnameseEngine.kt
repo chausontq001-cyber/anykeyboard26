@@ -4,11 +4,28 @@ import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
 
 class VietnameseEngine(
-    var typingMethod: TypingMethod = TypingMethod.TELEX,
-    var tonePlacement: TonePlacement = TonePlacement.MODERN
-) {
+    typingMethod: TypingMethod = TypingMethod.TELEX,
+    tonePlacement: TonePlacement = TonePlacement.MODERN,
+    private val telexEngineFactory: () -> TelexEngine = { FunputTelexEngine() }
+) : AutoCloseable {
+    var typingMethod: TypingMethod = typingMethod
+        set(value) {
+            if (field == value) return
+            field = value
+            recompose()
+        }
+
+    var tonePlacement: TonePlacement = tonePlacement
+        set(value) {
+            if (field == value) return
+            field = value
+            telexEngine?.configure(value)
+            recompose()
+        }
+
     // Current word buffer holding raw typed characters
     private var rawBuffer = StringBuilder()
+    private var telexEngine: TelexEngine? = null
 
     // Composed word displayed to the user
     var composedWord: String = ""
@@ -27,9 +44,15 @@ class VietnameseEngine(
         currentTone = 0
         lastKeyWasTone = null
         lastKeyWasModifier = null
+        telexEngine?.clear()
     }
 
     fun isWordActive(): Boolean = rawBuffer.isNotEmpty()
+
+    override fun close() {
+        telexEngine?.close()
+        telexEngine = null
+    }
 
     /**
      * Called when a key is typed.
@@ -66,112 +89,18 @@ class VietnameseEngine(
             return false
         }
         rawBuffer.deleteCharAt(rawBuffer.length - 1)
-        recompose()
+        composedWord = if (typingMethod == TypingMethod.TELEX) {
+            getTelexEngine().backspace()
+        } else {
+            recompose()
+            composedWord
+        }
         return true
     }
 
     private fun processTelex(c: Char): ProcessResult {
-        val lower = c.lowercaseChar()
-
-        // 1. Check double tone key undo (e.g. typing 's' when 's' just applied sắc -> undo to 'as')
-        if (lastKeyWasTone == lower && currentTone != 0) {
-            // Revert tone mark and append the literal tone key
-            currentTone = 0
-            lastKeyWasTone = null
-            rawBuffer.append(c)
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        // 2. Check tone keys: s, f, r, x, j, z
-        val toneIndex = when (lower) {
-            's' -> 1
-            'f' -> 2
-            'r' -> 3
-            'x' -> 4
-            'j' -> 5
-            'z' -> 0
-            else -> -1
-        }
-
-        if (toneIndex != -1 && rawBuffer.isNotEmpty()) {
-            // Check if there are vowels in the buffer to receive the tone
-            val hasVowels = rawBuffer.any { VietnameseCharUtils.isVowel(it) }
-            if (hasVowels) {
-                if (lower == 'z') {
-                    currentTone = 0
-                    lastKeyWasTone = null
-                    recompose()
-                    return ProcessResult.Composing(composedWord)
-                }
-
-                if (currentTone == toneIndex) {
-                    // Double tone key pressed -> undo tone and insert literal
-                    currentTone = 0
-                    lastKeyWasTone = null
-                    rawBuffer.append(c)
-                    recompose()
-                    return ProcessResult.Composing(composedWord)
-                } else {
-                    currentTone = toneIndex
-                    lastKeyWasTone = lower
-                    recompose()
-                    return ProcessResult.Composing(composedWord)
-                }
-            }
-        }
-
-        // 3. Modifier keys: aa, aw, ee, oo, ow, uw, w, dd
-        val lastRaw = rawBuffer.lastOrNull()?.lowercaseChar()
-
-        if (lower == 'a' && lastRaw == 'a') {
-            // aa -> â (or undo if already â)
-            if (lastKeyWasModifier == 'a') {
-                // Undo: change back to 'aa'
-                lastKeyWasModifier = null
-                rawBuffer.append(c)
-            } else {
-                lastKeyWasModifier = 'a'
-                rawBuffer.append(c)
-            }
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        if (lower == 'w') {
-            // w transforms preceding a -> ă, o -> ơ, u -> ư, or uo -> ươ
-            lastKeyWasModifier = 'w'
-            rawBuffer.append(c)
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        if (lower == 'e' && lastRaw == 'e') {
-            lastKeyWasModifier = 'e'
-            rawBuffer.append(c)
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        if (lower == 'o' && lastRaw == 'o') {
-            lastKeyWasModifier = 'o'
-            rawBuffer.append(c)
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        if (lower == 'd' && lastRaw == 'd') {
-            lastKeyWasModifier = 'd'
-            rawBuffer.append(c)
-            recompose()
-            return ProcessResult.Composing(composedWord)
-        }
-
-        // Regular character append
-        lastKeyWasTone = null
-        lastKeyWasModifier = null
         rawBuffer.append(c)
-        recompose()
+        composedWord = getTelexEngine().process(c.code)
         return ProcessResult.Composing(composedWord)
     }
 
@@ -232,77 +161,39 @@ class VietnameseEngine(
      * Recompose the string from rawBuffer according to Vietnamese phonetic rules.
      */
     private fun recompose() {
+        if (typingMethod == TypingMethod.TELEX) {
+            if (rawBuffer.isEmpty()) {
+                telexEngine?.clear()
+                composedWord = ""
+                return
+            }
+            val engine = getTelexEngine()
+            engine.clear()
+            composedWord = rawBuffer.fold("") { _, c -> engine.process(c.code) }
+            return
+        }
+
+        telexEngine?.clear()
         if (rawBuffer.isEmpty()) {
             composedWord = ""
             return
         }
 
-        val raw = rawBuffer.toString()
-        var text = raw
-
-        if (typingMethod == TypingMethod.TELEX) {
-            text = applyTelexVowels(text)
-        } else if (typingMethod == TypingMethod.VNI) {
+        var text = rawBuffer.toString()
+        if (typingMethod == TypingMethod.VNI) {
             text = applyVniVowels(text)
         }
-
-        // Now place currentTone on the correct vowel
         if (currentTone > 0) {
             text = applyToneToComposedText(text, currentTone, tonePlacement)
         }
-
         composedWord = text
     }
 
-    private fun applyTelexVowels(input: String): String {
-        var res = input
-
-        // dd -> đ
-        res = replaceCasePreserving(res, "dd", "đ")
-
-        // aa -> â
-        res = replaceCasePreserving(res, "aa", "â")
-
-        // aw -> ă
-        res = replaceCasePreserving(res, "aw", "ă")
-
-        // ee -> ê
-        res = replaceCasePreserving(res, "ee", "ê")
-
-        // oo -> ô
-        res = replaceCasePreserving(res, "oo", "ô")
-
-        // ow -> ơ
-        res = replaceCasePreserving(res, "ow", "ơ")
-
-        // uw -> ư
-        res = replaceCasePreserving(res, "uw", "ư")
-
-        // uow -> ươ
-        res = replaceCasePreserving(res, "uow", "ươ")
-
-        // w at the start or after consonants -> ư
-        if (res.startsWith("w", ignoreCase = true)) {
-            val isUpper = res.first().isUpperCase()
-            res = (if (isUpper) "Ư" else "ư") + res.substring(1)
+    private fun getTelexEngine(): TelexEngine =
+        telexEngine ?: telexEngineFactory().also {
+            it.configure(tonePlacement)
+            telexEngine = it
         }
-
-        // uo + w or u + w
-        res = replaceCasePreserving(res, "uow", "ươ")
-        res = replaceCasePreserving(res, "uw", "ư")
-        res = replaceCasePreserving(res, "ow", "ơ")
-
-        // Handle standalone 'w' after 'u' and 'o' clusters like 'duongw' -> 'đương'
-        if (res.contains("uongw", ignoreCase = true)) {
-            res = replaceCasePreserving(res, "uongw", "ương")
-        } else if (res.contains("uow", ignoreCase = true)) {
-            res = replaceCasePreserving(res, "uow", "ươ")
-        } else if (res.contains("uo", ignoreCase = true) && res.endsWith("w", ignoreCase = true)) {
-            res = replaceCasePreserving(res.dropLast(1), "uo", "ươ")
-        }
-
-        return res
-    }
 
     private fun applyVniVowels(input: String): String {
         var res = input

@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.ime.engine.VietnameseDictionary
+import com.example.ime.engine.TelexEngine
 import com.example.ime.engine.VietnameseEngine
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
@@ -11,30 +12,24 @@ import org.junit.Test
 class VietnameseEngineTest {
 
     @Test
-    fun testTelexBasic() {
+    fun testTelexDelegatesCompositionAndBackspace() {
+        val telexEngine = FakeTelexEngine()
         val engine = VietnameseEngine(
             typingMethod = TypingMethod.TELEX,
-            tonePlacement = TonePlacement.MODERN
+            tonePlacement = TonePlacement.MODERN,
+            telexEngineFactory = { telexEngine }
         )
 
-        // In Telex: 'v', 'i', 'e', 'e', 't', 'j' -> 'việt'
-        "vieetj".forEach { engine.processChar(it) }
-        assertEquals("việt", engine.composedWord)
+        "abc".forEach { engine.processChar(it) }
+        assertEquals("abc", engine.composedWord)
+        assertTrue(engine.processBackspace())
+        assertEquals("ab", engine.composedWord)
 
+        engine.tonePlacement = TonePlacement.CLASSIC
+        assertEquals(TonePlacement.CLASSIC, telexEngine.tonePlacement)
         engine.reset()
-        // Type 't', 'o', 'a', 'n', 's' -> 'toán'
-        "toans".forEach { engine.processChar(it) }
-        assertEquals("toán", engine.composedWord)
-
-        engine.reset()
-        // Type 't', 'i', 'e', 'e', 'n', 'g', 's' -> 'tiếng'
-        "tieengs".forEach { engine.processChar(it) }
-        assertEquals("tiếng", engine.composedWord)
-
-        engine.reset()
-        // Type 'd', 'd', 'u', 'o', 'n', 'g', 'w', 'f' -> 'đường'
-        "dduongwf".forEach { engine.processChar(it) }
-        assertEquals("đường", engine.composedWord)
+        assertEquals("", engine.composedWord)
+        engine.close()
     }
 
     @Test
@@ -60,11 +55,36 @@ class VietnameseEngineTest {
     }
 
     @Test
-    fun testSmartDictionarySuggestions() {
+    fun testDictionarySuggestions() {
         val suggestionsForXin = VietnameseDictionary.getSuggestions("xin", null)
         assertTrue(suggestionsForXin.contains("chào") || suggestionsForXin.contains("lỗi"))
 
-        val shortcuts = VietnameseDictionary.getSuggestions("dc", null)
-        assertTrue(shortcuts.contains("được"))
+        assertTrue(!VietnameseDictionary.getSuggestions("dc", null).contains("được"))
+    }
+
+    private class FakeTelexEngine : TelexEngine {
+        private val buffer = StringBuilder()
+        var tonePlacement = TonePlacement.MODERN
+            private set
+
+        override fun configure(tonePlacement: TonePlacement) {
+            this.tonePlacement = tonePlacement
+        }
+
+        override fun process(codePoint: Int): String {
+            buffer.appendCodePoint(codePoint)
+            return buffer.toString()
+        }
+
+        override fun backspace(): String {
+            buffer.deleteCharAt(buffer.length - 1)
+            return buffer.toString()
+        }
+
+        override fun clear() {
+            buffer.clear()
+        }
+
+        override fun close() = Unit
     }
 }

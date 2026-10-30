@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ShortText
-import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
@@ -24,8 +22,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,25 +32,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.ime.ImeStatus
 import com.example.ime.model.KeyboardPreferences
 import com.example.ui.screens.AppearanceScreen
 import com.example.ui.screens.EngineSettingsScreen
 import com.example.ui.screens.LanguagesScreen
 import com.example.ui.screens.SandboxScreen
-import com.example.ui.screens.ShortcutsScreen
 import com.example.ui.theme.MyApplicationTheme
 
 enum class NavTab(val title: String, val icon: ImageVector, val tag: String) {
     SANDBOX("Thử gõ", Icons.Default.EditNote, "tab_sandbox"),
     APPEARANCE("Giao diện", Icons.Default.Palette, "tab_appearance"),
     ENGINE("Cử chỉ & Gõ", Icons.Default.Tune, "tab_engine"),
-    LANGUAGES("Ngôn ngữ", Icons.Default.Public, "tab_languages"),
-    SHORTCUTS("Viết tắt", Icons.AutoMirrored.Filled.ShortText, "tab_shortcuts")
+    LANGUAGES("Ngôn ngữ", Icons.Default.Public, "tab_languages")
 }
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var preferences: KeyboardPreferences
+    private val isImeEnabled = mutableStateOf(false)
+    private val isImeDefault = mutableStateOf(false)
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,7 +62,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                var selectedTab by remember { mutableIntStateOf(0) }
+                var selectedTab by remember { mutableStateOf(0) }
+                val imeEnabled by isImeEnabled
+                val imeDefault by isImeDefault
+
+                LaunchedEffect(imeEnabled) {
+                    if (!imeEnabled) selectedTab = 0
+                }
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -88,7 +94,10 @@ class MainActivity : ComponentActivity() {
                             NavTab.values().forEachIndexed { index, tab ->
                                 NavigationBarItem(
                                     selected = selectedTab == index,
-                                    onClick = { selectedTab = index },
+                                    enabled = index == 0 || imeEnabled,
+                                    onClick = {
+                                        if (index == 0 || imeEnabled) selectedTab = index
+                                    },
                                     icon = {
                                         Icon(imageVector = tab.icon, contentDescription = tab.title)
                                     },
@@ -104,19 +113,36 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        when (selectedTab) {
+                        when (if (imeEnabled) selectedTab else 0) {
                             0 -> SandboxScreen(
                                 preferences = preferences,
-                                onNavigateToSettings = { selectedTab = 1 }
+                                onNavigateToSettings = { if (imeEnabled) selectedTab = 1 },
+                                isImeEnabled = imeEnabled,
+                                isImeDefault = imeDefault
                             )
                             1 -> AppearanceScreen(preferences = preferences)
                             2 -> EngineSettingsScreen(preferences = preferences)
                             3 -> LanguagesScreen(preferences = preferences)
-                            4 -> ShortcutsScreen()
                         }
                     }
                 }
+
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshImeStatus()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) refreshImeStatus()
+    }
+
+    private fun refreshImeStatus() {
+        isImeEnabled.value = ImeStatus.isEnabled(this)
+        isImeDefault.value = ImeStatus.isDefault(this)
     }
 }

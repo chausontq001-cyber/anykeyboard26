@@ -50,9 +50,11 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -77,12 +79,15 @@ import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.KeyboardSettings
 import com.example.ime.model.TypingMethod
 import com.example.ime.ui.ComposeKeyboardView
+import kotlin.math.abs
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SandboxScreen(
     preferences: KeyboardPreferences,
     onNavigateToSettings: () -> Unit,
+    isImeEnabled: Boolean,
+    isImeDefault: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -106,10 +111,15 @@ fun SandboxScreen(
             tonePlacement = settings.tonePlacement
         )
     }
+    DisposableEffect(testEngine) {
+        onDispose { testEngine.close() }
+    }
 
     var composingWord by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var lastCommitted by remember { mutableStateOf<String?>(null) }
+    var deleteSelectionAnchor by remember { mutableIntStateOf(0) }
+    var deleteSelectionEnd by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(settings.typingMethod, settings.tonePlacement) {
         testEngine.typingMethod = settings.typingMethod
@@ -181,20 +191,72 @@ fun SandboxScreen(
         }
     }
 
-    fun handleFastDelete() {
+    fun beginDeleteSelection() {
         if (testEngine.isWordActive()) {
+            insertTextAtCursor(testEngine.composedWord)
             testEngine.reset()
             composingWord = ""
-        } else {
-            val currentText = textState.text
-            val selStart = textState.selection.min
-            if (selStart > 0) {
-                val deleteCount = 6.coerceAtMost(selStart)
-                val newText = currentText.substring(0, selStart - deleteCount) + currentText.substring(selStart)
-                textState = TextFieldValue(newText, TextRange(selStart - deleteCount))
-            }
+        }
+        deleteSelectionAnchor = textState.selection.min
+        deleteSelectionEnd = textState.selection.max
+    }
+
+    fun moveDeleteSelection(step: Int) {
+        deleteSelectionEnd = (deleteSelectionEnd + step)
+            .coerceIn(deleteSelectionAnchor, textState.text.length)
+        textState = textState.copy(
+            selection = TextRange(deleteSelectionAnchor, deleteSelectionEnd)
+        )
+    }
+
+    fun finishDeleteSelection() {
+        if (deleteSelectionAnchor != deleteSelectionEnd) {
+            val text = textState.text
+            textState = TextFieldValue(
+                text.substring(0, deleteSelectionAnchor) + text.substring(deleteSelectionEnd),
+                TextRange(deleteSelectionAnchor)
+            )
         }
         updateSuggestions("")
+    }
+
+    fun moveCursorByTouchpad(horizontalSteps: Int, verticalSteps: Int) {
+        if (testEngine.isWordActive()) {
+            insertTextAtCursor(testEngine.composedWord)
+            testEngine.reset()
+            composingWord = ""
+        }
+
+        var position = textState.selection.end.coerceIn(0, textState.text.length)
+        repeat(abs(horizontalSteps)) {
+            position = (position + if (horizontalSteps > 0) 1 else -1)
+                .coerceIn(0, textState.text.length)
+        }
+        repeat(abs(verticalSteps)) {
+            val text = textState.text
+            val previousLineBreak = text.lastIndexOf('\n', (position - 1).coerceAtLeast(0))
+            val lineStart = previousLineBreak + 1
+            val column = position - lineStart
+            if (verticalSteps < 0) {
+                if (previousLineBreak >= 0) {
+                    val priorLineBreak = text.lastIndexOf('\n', (previousLineBreak - 1).coerceAtLeast(0))
+                    val priorLineStart = priorLineBreak + 1
+                    position = (priorLineStart + column).coerceAtMost(previousLineBreak)
+                } else {
+                    position = (position - 20).coerceAtLeast(0)
+                }
+            } else {
+                val nextLineBreak = text.indexOf('\n', position)
+                if (nextLineBreak >= 0) {
+                    val nextLineEnd = text.indexOf('\n', nextLineBreak + 1)
+                        .let { if (it < 0) text.length else it }
+                    position = (nextLineBreak + 1 + column).coerceAtMost(nextLineEnd)
+                } else {
+                    position = (position + 20).coerceAtMost(text.length)
+                }
+            }
+        }
+        textState = textState.copy(selection = TextRange(position))
     }
 
     fun cycleNextLanguage() {
@@ -295,8 +357,39 @@ fun SandboxScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (!isImeDefault) {
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("default_ime_banner"),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Chọn AnyKeyboard26 làm bàn phím mặc định để sử dụng.",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    FilledTonalButton(
+                        onClick = {
+                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                            imm?.showInputMethodPicker()
+                        },
+                        modifier = Modifier.testTag("btn_choose_default_ime")
+                    ) {
+                        Text("Chọn")
+                    }
+                }
+            }
+        }
+
         // 1. Activation & Quick Setup Banner
-        Card(
+        if (!isImeEnabled) Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
@@ -558,6 +651,7 @@ fun SandboxScreen(
                     )
 
                     OutlinedButton(
+                        enabled = isImeEnabled,
                         onClick = onNavigateToSettings,
                         modifier = Modifier.height(32.dp).testTag("btn_customize_keyboard")
                     ) {
@@ -578,12 +672,17 @@ fun SandboxScreen(
                     suggestions = suggestions,
                     onKeyTyped = { c -> handleKeyTyped(c) },
                     onBackspace = { handleBackspace() },
-                    onFastDelete = { handleFastDelete() },
+                    onStartDeleteSelection = { beginDeleteSelection() },
+                    onMoveDeleteSelection = { moveDeleteSelection(it) },
+                    onFinishDeleteSelection = { finishDeleteSelection() },
                     onSpace = { handleSpace() },
                     onEnter = { insertTextAtCursor("\n") },
                     onSelectSuggestion = { s -> handleSuggestionSelect(s) },
                     onMoveCursorLeft = { moveCursorLeft() },
                     onMoveCursorRight = { moveCursorRight() },
+                    onMoveCursorByTouchpad = { horizontal, vertical ->
+                        moveCursorByTouchpad(horizontal, vertical)
+                    },
                     onMoveCursorStart = { moveCursorStart() },
                     onMoveCursorEnd = { moveCursorEnd() },
                     onSelectAll = { selectAll() },

@@ -1,27 +1,6 @@
 package com.example.ime.engine
 
-import com.example.ime.model.Shortcut
-
 object VietnameseDictionary {
-
-    // Default fast shortcuts
-    val defaultShortcuts = listOf(
-        Shortcut("dc", "được"),
-        Shortcut("ko", "không"),
-        Shortcut("k", "không"),
-        Shortcut("ng", "người"),
-        Shortcut("vs", "với"),
-        Shortcut("vn", "Việt Nam"),
-        Shortcut("hn", "Hà Nội"),
-        Shortcut("hcm", "Hồ Chí Minh"),
-        Shortcut("bt", "bình thường"),
-        Shortcut("oki", "OK"),
-        Shortcut("ms", "mình"),
-        Shortcut("cg", "cũng"),
-        Shortcut("nt", "nhắn tin"),
-        Shortcut("tn", "thế nào"),
-        Shortcut("đc", "được")
-    )
 
     // Contextual next-word bigram predictions
     private val NEXT_WORD_MAP: Map<String, List<String>> = mapOf(
@@ -79,7 +58,6 @@ object VietnameseDictionary {
     fun getSuggestions(
         currentWord: String,
         previousWord: String?,
-        shortcuts: List<Shortcut> = defaultShortcuts,
         limit: Int = 4
     ): List<String> {
         val results = mutableListOf<String>()
@@ -87,20 +65,7 @@ object VietnameseDictionary {
         val trimmed = currentWord.trim()
         val lower = trimmed.lowercase()
 
-        // 1. Check user shortcuts first
-        if (lower.isNotEmpty()) {
-            val shortcutMatch = shortcuts.find { it.trigger.equals(lower, ignoreCase = true) }
-            if (shortcutMatch != null) {
-                val replacement = if (trimmed.firstOrNull()?.isUpperCase() == true) {
-                    shortcutMatch.replacement.replaceFirstChar { it.uppercase() }
-                } else {
-                    shortcutMatch.replacement
-                }
-                results.add(replacement)
-            }
-        }
-
-        // 2. If user is currently typing a word (prefix matching)
+        // If the user is currently typing a word (prefix matching)
         if (lower.isNotEmpty()) {
             val matchedWords = COMMON_WORDS.filter {
                 it.lowercase().startsWith(lower) && !it.equals(lower, ignoreCase = true)
@@ -129,7 +94,7 @@ object VietnameseDictionary {
             }
         }
 
-        // 3. If previousWord is available -> Predict next words
+        // Predict next words from the previous word.
         if (results.size < limit && !previousWord.isNullOrBlank()) {
             val prevLower = previousWord.trim().lowercase()
             val nextList = NEXT_WORD_MAP[prevLower]
@@ -143,7 +108,7 @@ object VietnameseDictionary {
             }
         }
 
-        // 4. Fill with popular suggestions if still not enough
+        // Fill with popular suggestions if there are no prefix or contextual matches.
         if (results.size < limit && lower.isEmpty()) {
             val defaults = listOf("xin chào", "cảm ơn", "chúc bạn", "Việt Nam")
             for (d in defaults) {

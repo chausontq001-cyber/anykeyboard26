@@ -396,7 +396,7 @@ fun EngineSettingsScreen(
                 // 1. Swipe space to move cursor
                 FeatureToggleRow(
                     title = "Lướt trên phím cách để di chuyển con trỏ",
-                    subtitle = "Trượt ngón tay sang trái hoặc phải trên phím cách để di chuyển con trỏ văn bản chính xác",
+                    subtitle = "Vuốt theo hai chiều để điều khiển con trỏ; biểu tượng con trỏ xuất hiện khi đang vuốt",
                     checked = settings.swipeSpaceToMoveCursor,
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(swipeSpaceToMoveCursor = c) } }
                 )
@@ -409,10 +409,10 @@ fun EngineSettingsScreen(
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(holdSpaceToSwitchLanguage = c) } }
                 )
 
-                // 3. Swipe backspace to delete fast
+                // 3. Swipe from backspace to select text for deletion
                 FeatureToggleRow(
-                    title = "Lướt phải trên phím xóa để xóa nhanh",
-                    subtitle = "Trượt ngón tay sang phải từ phím xóa để xóa nhanh",
+                    title = "Vuốt phải trên phím xóa để chọn và xóa",
+                    subtitle = "Vuốt tiếp để mở rộng vùng chọn; nhả tay để xóa",
                     checked = settings.swipeBackspaceToDeleteFast,
                     onCheckedChange = { c -> preferences.updateSettings { it.copy(swipeBackspaceToDeleteFast = c) } }
                 )
