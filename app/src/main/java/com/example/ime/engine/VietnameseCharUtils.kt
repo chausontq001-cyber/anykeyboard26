@@ -53,6 +53,36 @@ object VietnameseCharUtils {
         return if (c.isUpperCase()) info.first.uppercaseChar() else info.first
     }
 
+    fun toTelexSequence(text: String): String = buildString {
+        for (char in text) {
+            val toneInfo = getBaseVowelAndTone(char)
+            val baseChar = toneInfo?.first ?: char
+            val lower = baseChar.lowercaseChar()
+            val spelling = when (lower) {
+                'ă' -> "aw"
+                'â' -> "aa"
+                'ê' -> "ee"
+                'ô' -> "oo"
+                'ơ' -> "ow"
+                'ư' -> "uw"
+                'đ' -> "dd"
+                else -> baseChar.toString()
+            }
+            val isUpper = char.isUpperCase()
+            append(if (isUpper) spelling.uppercase() else spelling)
+            append(
+                when (toneInfo?.second) {
+                    1 -> if (isUpper) 'S' else 's'
+                    2 -> if (isUpper) 'F' else 'f'
+                    3 -> if (isUpper) 'R' else 'r'
+                    4 -> if (isUpper) 'X' else 'x'
+                    5 -> if (isUpper) 'J' else 'j'
+                    else -> ""
+                }
+            )
+        }
+    }
+
     /**
      * Determines which vowel index in a vowel cluster should receive the tone mark.
      * Supports both modern (hóa, thúy) and classic (hoá, thuý) rules.

@@ -2,10 +2,17 @@ package com.example.ime.model
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
+@Immutable
 data class KeyboardSettings(
     val typingMethod: TypingMethod = TypingMethod.TELEX,
     val tonePlacement: TonePlacement = TonePlacement.MODERN,
@@ -18,11 +25,14 @@ data class KeyboardSettings(
     val alignment: KeyboardAlignment = KeyboardAlignment.CENTER,
     val bottomChinHeightDp: Int = 44,      // Virtual Navigation Bar height (36 to 64 dp)
     val showVirtualNavBar: Boolean = true,  // Bottom navigation chin
+    val smartFeaturesEnabled: Boolean = true,
+    val tonePlacementEnabled: Boolean = true,
     val showSuggestions: Boolean = true,
     val autoCapitalize: Boolean = true,
     val hapticFeedback: Boolean = true,
     val soundFeedback: Boolean = false,
     val showNumberRow: Boolean = false,
+    val showNumberRowInLandscape: Boolean = false,
     val spaceBarVietnameseIndicator: Boolean = true,
     val navBarShowCursorArrows: Boolean = true,
     val navBarShowLineJump: Boolean = true,
@@ -49,15 +59,41 @@ class KeyboardPreferences(context: Context) {
         Context.MODE_PRIVATE
     )
 
-    private val _settings = MutableStateFlow(loadSettings())
+    private val _settings = MutableStateFlow(KeyboardSettings())
     val settings: StateFlow<KeyboardSettings> = _settings.asStateFlow()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val settingsReadGeneration = AtomicLong()
+    private val settingsLock = Any()
+    private val pendingUpdates = mutableListOf<(KeyboardSettings) -> KeyboardSettings>()
+    private var settingsLoaded = false
 
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-        _settings.value = loadSettings()
+        reloadSettings()
     }
 
     init {
         prefs.registerOnSharedPreferenceChangeListener(listener)
+        reloadSettings()
+    }
+
+    private fun reloadSettings() {
+        val generation = settingsReadGeneration.incrementAndGet()
+        ioScope.launch {
+            val loaded = loadSettings()
+            if (settingsReadGeneration.get() != generation) return@launch
+            synchronized(settingsLock) {
+                if (settingsReadGeneration.get() != generation) return@synchronized
+                if (!settingsLoaded) {
+                    val merged = pendingUpdates.fold(loaded) { current, update -> update(current) }
+                    if (pendingUpdates.isNotEmpty()) persistSettings(merged)
+                    pendingUpdates.clear()
+                    settingsLoaded = true
+                    _settings.value = merged
+                } else {
+                    _settings.value = loaded
+                }
+            }
+        }
     }
 
     private fun loadSettings(): KeyboardSettings {
@@ -83,11 +119,14 @@ class KeyboardPreferences(context: Context) {
             ),
             bottomChinHeightDp = prefs.getInt(KEY_BOTTOM_CHIN_HEIGHT, 44),
             showVirtualNavBar = prefs.getBoolean(KEY_SHOW_VIRTUAL_NAV_BAR, true),
+            smartFeaturesEnabled = prefs.getBoolean(KEY_SMART_FEATURES_ENABLED, true),
+            tonePlacementEnabled = prefs.getBoolean(KEY_TONE_PLACEMENT_ENABLED, true),
             showSuggestions = prefs.getBoolean(KEY_SHOW_SUGGESTIONS, true),
             autoCapitalize = prefs.getBoolean(KEY_AUTO_CAPITALIZE, true),
             hapticFeedback = prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true),
             soundFeedback = prefs.getBoolean(KEY_SOUND_FEEDBACK, false),
             showNumberRow = prefs.getBoolean(KEY_SHOW_NUMBER_ROW, false),
+            showNumberRowInLandscape = prefs.getBoolean(KEY_SHOW_NUMBER_ROW_LANDSCAPE, false),
             spaceBarVietnameseIndicator = prefs.getBoolean(KEY_SPACE_INDICATOR, true),
             navBarShowCursorArrows = prefs.getBoolean(KEY_NAV_ARROWS, true),
             navBarShowLineJump = prefs.getBoolean(KEY_NAV_LINE_JUMP, true),
@@ -111,7 +150,18 @@ class KeyboardPreferences(context: Context) {
     }
 
     fun updateSettings(transform: (KeyboardSettings) -> KeyboardSettings) {
-        val updated = transform(_settings.value)
+        synchronized(settingsLock) {
+            val updated = transform(_settings.value)
+            if (settingsLoaded) {
+                persistSettings(updated)
+            } else {
+                pendingUpdates += transform
+            }
+            _settings.value = updated
+        }
+    }
+
+    private fun persistSettings(updated: KeyboardSettings) {
         prefs.edit().apply {
             putString(KEY_TYPING_METHOD, updated.typingMethod.name)
             putString(KEY_TONE_PLACEMENT, updated.tonePlacement.name)
@@ -124,11 +174,14 @@ class KeyboardPreferences(context: Context) {
             putString(KEY_ALIGNMENT, updated.alignment.name)
             putInt(KEY_BOTTOM_CHIN_HEIGHT, updated.bottomChinHeightDp)
             putBoolean(KEY_SHOW_VIRTUAL_NAV_BAR, updated.showVirtualNavBar)
+            putBoolean(KEY_SMART_FEATURES_ENABLED, updated.smartFeaturesEnabled)
+            putBoolean(KEY_TONE_PLACEMENT_ENABLED, updated.tonePlacementEnabled)
             putBoolean(KEY_SHOW_SUGGESTIONS, updated.showSuggestions)
             putBoolean(KEY_AUTO_CAPITALIZE, updated.autoCapitalize)
             putBoolean(KEY_HAPTIC_FEEDBACK, updated.hapticFeedback)
             putBoolean(KEY_SOUND_FEEDBACK, updated.soundFeedback)
             putBoolean(KEY_SHOW_NUMBER_ROW, updated.showNumberRow)
+            putBoolean(KEY_SHOW_NUMBER_ROW_LANDSCAPE, updated.showNumberRowInLandscape)
             putBoolean(KEY_SPACE_INDICATOR, updated.spaceBarVietnameseIndicator)
             putBoolean(KEY_NAV_ARROWS, updated.navBarShowCursorArrows)
             putBoolean(KEY_NAV_LINE_JUMP, updated.navBarShowLineJump)
@@ -146,7 +199,6 @@ class KeyboardPreferences(context: Context) {
             putInt(KEY_FLOATING_SCALE, updated.floatingScalePercent)
             apply()
         }
-        _settings.value = updated
     }
 
     companion object {
@@ -162,11 +214,14 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_ALIGNMENT = "alignment"
         private const val KEY_BOTTOM_CHIN_HEIGHT = "bottom_chin_height"
         private const val KEY_SHOW_VIRTUAL_NAV_BAR = "show_virtual_nav_bar"
+        private const val KEY_SMART_FEATURES_ENABLED = "smart_features_enabled"
+        private const val KEY_TONE_PLACEMENT_ENABLED = "tone_placement_enabled"
         private const val KEY_SHOW_SUGGESTIONS = "show_suggestions"
         private const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
         private const val KEY_SOUND_FEEDBACK = "sound_feedback"
         private const val KEY_SHOW_NUMBER_ROW = "show_number_row"
+        private const val KEY_SHOW_NUMBER_ROW_LANDSCAPE = "show_number_row_landscape"
         private const val KEY_SPACE_INDICATOR = "space_indicator"
         private const val KEY_NAV_ARROWS = "nav_arrows"
         private const val KEY_NAV_LINE_JUMP = "nav_line_jump"

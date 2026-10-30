@@ -35,8 +35,10 @@ import com.example.MainActivity
 import com.example.ime.CursorMovement
 import com.example.ime.NavigationBarPolicy
 import com.example.ime.engine.VietnameseDictionary
+import com.example.ime.engine.VietnameseCharUtils
 import com.example.ime.engine.VietnameseEngine
 import com.example.ime.model.KeyboardPreferences
+import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
 import com.example.ime.model.WorldLanguagesRepository
 import com.example.ime.ui.ComposeKeyboardView
@@ -48,6 +50,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     companion object {
         private const val TAG = "AnyKeyboard26"
+        private const val MAX_TELEX_WORD_LENGTH = 128
     }
 
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -92,7 +95,11 @@ class VietnameseInputMethodService : InputMethodService(),
             val initialSettings = preferences.settings.value
             engine = VietnameseEngine(
                 typingMethod = initialSettings.typingMethod,
-                tonePlacement = initialSettings.tonePlacement
+                tonePlacement = if (initialSettings.tonePlacementEnabled) {
+                    initialSettings.tonePlacement
+                } else {
+                    TonePlacement.MODERN
+                }
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing preferences/engine", e)
@@ -102,6 +109,9 @@ class VietnameseInputMethodService : InputMethodService(),
     private fun initWindowDecorView() {
         try {
             val win = window?.window ?: return
+            win.attributes = win.attributes.apply {
+                preferredRefreshRate = 0f
+            }
             val decorView = win.decorView ?: return
             ViewCompat.setOnApplyWindowInsetsListener(decorView) { _, insets ->
                 hideVirtualNavigationBarState =
@@ -132,7 +142,10 @@ class VietnameseInputMethodService : InputMethodService(),
         }
         if (!::engine.isInitialized) {
             val s = preferences.settings.value
-            engine = VietnameseEngine(s.typingMethod, s.tonePlacement)
+            engine = VietnameseEngine(
+                s.typingMethod,
+                if (s.tonePlacementEnabled) s.tonePlacement else TonePlacement.MODERN
+            )
         }
 
         val composeView = ComposeView(this).apply {
@@ -147,7 +160,11 @@ class VietnameseInputMethodService : InputMethodService(),
 
                     // Keep engine synced with user preferences
                     engine.typingMethod = settings.typingMethod
-                    engine.tonePlacement = settings.tonePlacement
+                    engine.tonePlacement = if (settings.tonePlacementEnabled) {
+                        settings.tonePlacement
+                    } else {
+                        TonePlacement.MODERN
+                    }
 
                     ComposeKeyboardView(
                         settings = settings,
@@ -290,6 +307,37 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleKeyTyped(c: Char) {
         val ic = currentInputConnection ?: return
+
+        if (engine.typingMethod == TypingMethod.TELEX && !engine.isWordActive() && c.isLetter()) {
+            val textBeforeCursor = ic.getTextBeforeCursor(MAX_TELEX_WORD_LENGTH, 0)
+                ?.toString()
+                .orEmpty()
+            val previousWord = textBeforeCursor.takeLastWhile(Char::isLetter)
+            if (previousWord.isNotEmpty()) {
+                val extracted = getExtractedText(ic)
+                if (extracted != null &&
+                    extracted.selectionStart >= 0 &&
+                    extracted.selectionStart == extracted.selectionEnd
+                ) {
+                    val cursor = extracted.startOffset + extracted.selectionEnd
+                    engine.reset()
+                    VietnameseCharUtils.toTelexSequence(previousWord).forEach(engine::processChar)
+                    val result = engine.processChar(c)
+                    if (result is VietnameseEngine.ProcessResult.Composing &&
+                        ic.setSelection(cursor - previousWord.length, cursor)
+                    ) {
+                        composingWordState = result.text
+                        ic.setComposingText(result.text, 1)
+                        updateSuggestions(result.text)
+                        return
+                    }
+                    if (result is VietnameseEngine.ProcessResult.Composing) {
+                        Log.w(TAG, "Input connection rejected selection for Telex recomposition")
+                    }
+                    engine.reset()
+                }
+            }
+        }
 
         when (val result = engine.processChar(c)) {
             is VietnameseEngine.ProcessResult.Composing -> {
@@ -513,6 +561,7 @@ class VietnameseInputMethodService : InputMethodService(),
             hintMaxChars = 20_000
             hintMaxLines = 1_000
         }
+
         return ic.getExtractedText(request, 0)
     }
 
@@ -548,6 +597,7 @@ class VietnameseInputMethodService : InputMethodService(),
                 typingMethod = typingMethod
             )
         }
+
     }
 
     private fun moveCursorLeft() {

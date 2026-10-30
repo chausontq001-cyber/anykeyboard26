@@ -3,6 +3,7 @@ package com.example
 import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.TelexEngine
 import com.example.ime.engine.VietnameseEngine
+import com.example.ime.engine.VietnameseCharUtils
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
 import org.junit.Assert.assertEquals
@@ -52,6 +53,12 @@ class VietnameseEngineTest {
         // Type 'd', '9', 'u', 'o', '7', 'n', 'g', '2' -> 'đường'
         "d9uo7ng2".forEach { engine.processChar(it) }
         assertEquals("đường", engine.composedWord)
+    }
+
+    @Test
+    fun telexSequenceRestoresCommittedVietnameseTextForRecomposition() {
+        assertEquals("cas", VietnameseCharUtils.toTelexSequence("cá"))
+        assertEquals("dduwowfng", VietnameseCharUtils.toTelexSequence("đường"))
     }
 
     @Test

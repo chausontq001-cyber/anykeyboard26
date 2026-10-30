@@ -116,6 +116,22 @@ enum class ShiftState {
     CAPS_LOCK
 }
 
+private val SPLIT_TOP_LEFT_KEYS = listOf("q", "w", "e", "r", "t")
+private val SPLIT_TOP_RIGHT_KEYS = listOf("y", "u", "i", "o", "p")
+private val SPLIT_MIDDLE_LEFT_KEYS = listOf("a", "s", "d", "f", "g")
+private val SPLIT_MIDDLE_RIGHT_KEYS = listOf("h", "j", "k", "l")
+private val SPLIT_BOTTOM_LEFT_KEYS = listOf("z", "x", "c", "v")
+private val SPLIT_BOTTOM_RIGHT_KEYS = listOf("b", "n", "m")
+private val ALPHA_TOP_KEYS = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
+private val ALPHA_MIDDLE_KEYS = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
+private val ALPHA_BOTTOM_KEYS = listOf("z", "x", "c", "v", "b", "n", "m")
+private val SYMBOL_TOP_KEYS = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+private val SYMBOL_MIDDLE_KEYS = listOf("@", "#", "$", "%", "&", "-", "+", "(", ")", "/")
+private val SYMBOL_BOTTOM_KEYS = listOf("*", "\"", "'", ":", ";", "!", "?")
+private val MORE_SYMBOL_TOP_KEYS = listOf("~", "`", "|", "•", "√", "π", "÷", "×", "¶", "∆")
+private val MORE_SYMBOL_MIDDLE_KEYS = listOf("£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\")
+private val MORE_SYMBOL_BOTTOM_KEYS = listOf("%", "_", "<", ">", "[", "]", "§")
+
 @Composable
 fun ComposeKeyboardView(
     settings: KeyboardSettings,
@@ -164,6 +180,19 @@ fun ComposeKeyboardView(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isSplit = settings.displayStyle == KeyboardDisplayStyle.SPLIT || (isLandscape && settings.autoSplitInLandscape)
     val isFloating = settings.displayStyle == KeyboardDisplayStyle.FLOATING
+    val keyboardSettings = remember(settings, isLandscape) {
+        settings.copy(
+            showVirtualNavBar = settings.showVirtualNavBar && !isLandscape,
+            bottomChinHeightDp = if (isLandscape) 0 else settings.bottomChinHeightDp,
+            showNumberRow = settings.showNumberRow &&
+                (!isLandscape || settings.showNumberRowInLandscape),
+            showSuggestions = settings.showSuggestions && settings.smartFeaturesEnabled,
+            hapticFeedback = settings.hapticFeedback && settings.smartFeaturesEnabled,
+            swipeSpaceToMoveCursor = settings.swipeSpaceToMoveCursor && settings.smartFeaturesEnabled,
+            holdSpaceToSwitchLanguage = settings.holdSpaceToSwitchLanguage && settings.smartFeaturesEnabled,
+            swipeBackspaceToDeleteFast = settings.swipeBackspaceToDeleteFast && settings.smartFeaturesEnabled
+        )
+    }
 
     var floatingOffsetX by remember { mutableFloatStateOf(0f) }
     var floatingOffsetY by remember { mutableFloatStateOf(0f) }
@@ -172,7 +201,7 @@ fun ComposeKeyboardView(
     var shiftState by remember { mutableStateOf(ShiftState.OFF) }
 
     fun triggerHaptic() {
-        if (settings.hapticFeedback && vibrator != null) {
+        if (keyboardSettings.hapticFeedback && vibrator != null) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator.vibrate(VibrationEffect.createOneShot(12, 120))
@@ -182,20 +211,21 @@ fun ComposeKeyboardView(
     }
 
     val preferredKeyHeight =
-        (46 * (settings.keyboardHeightPercent / 100f) * (settings.keyScalePercent / 100f)).dp
+        (46 * (settings.keyboardHeightPercent / 100f) * (settings.keyScalePercent / 100f) *
+            if (isLandscape) 0.78f else 1f).dp
     val fontScale = (settings.fontScalePercent / 100f) * (settings.keyScalePercent / 100f)
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val isEmojiLayout = layoutMode == KeyboardLayoutMode.EMOJI
         val keyboardRows = when {
             isEmojiLayout -> 4.4f
-            layoutMode == KeyboardLayoutMode.ALPHA && settings.showNumberRow -> 4.8f
+            layoutMode == KeyboardLayoutMode.ALPHA && keyboardSettings.showNumberRow -> 4.8f
             else -> 4f
         }
         val reservedHeight =
-            (if (settings.showSuggestions || composingWord.isNotEmpty()) 42.dp else 0.dp) +
-                (if (settings.showVirtualNavBar && !hideVirtualNavigationBar) {
-                    settings.bottomChinHeightDp.dp
+            (if (keyboardSettings.showSuggestions || composingWord.isNotEmpty()) 42.dp else 0.dp) +
+                (if (keyboardSettings.showVirtualNavBar && !hideVirtualNavigationBar) {
+                    keyboardSettings.bottomChinHeightDp.dp
                 } else {
                     0.dp
                 }) +
@@ -215,7 +245,7 @@ fun ComposeKeyboardView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 12.dp),
+                .padding(bottom = if (isLandscape) 0.dp else 12.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
             Card(
@@ -278,7 +308,7 @@ fun ComposeKeyboardView(
                     // Keyboard body in floating mode
                     KeyboardContentWrapper(
                         isSplit = false,
-                        settings = settings,
+                        settings = keyboardSettings,
                         composingWord = composingWord,
                         suggestions = suggestions,
                         colorScheme = colorScheme,
@@ -335,7 +365,7 @@ fun ComposeKeyboardView(
         ) {
             KeyboardContentWrapper(
                 isSplit = isSplit,
-                settings = settings,
+                settings = keyboardSettings,
                 composingWord = composingWord,
                 suggestions = suggestions,
                 colorScheme = colorScheme,
@@ -696,12 +726,12 @@ private fun KeyboardMainContent(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("q", "w", "e", "r", "t").forEach { k ->
+                        SPLIT_TOP_LEFT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
                         Spacer(modifier = Modifier.weight(1.8f))
-                        listOf("y", "u", "i", "o", "p").forEach { k ->
+                        SPLIT_TOP_RIGHT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
@@ -713,12 +743,12 @@ private fun KeyboardMainContent(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("a", "s", "d", "f", "g").forEach { k ->
+                        SPLIT_MIDDLE_LEFT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
                         Spacer(modifier = Modifier.weight(2.2f))
-                        listOf("h", "j", "k", "l").forEach { k ->
+                        SPLIT_MIDDLE_RIGHT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1.25f, onClick = { onKeyTyped(display.first()) })
                         }
@@ -739,12 +769,12 @@ private fun KeyboardMainContent(
                             weight = 1.3f,
                             onClick = onToggleShift
                         )
-                        listOf("z", "x", "c", "v").forEach { k ->
+                        SPLIT_BOTTOM_LEFT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
                         Spacer(modifier = Modifier.weight(1.8f))
-                        listOf("b", "n", "m").forEach { k ->
+                        SPLIT_BOTTOM_RIGHT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
@@ -783,23 +813,20 @@ private fun KeyboardMainContent(
                     }
                 } else {
                     // STANDARD FULL DOCKED KEYBOARD
-                    val row1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        row1.forEach { k ->
+                        ALPHA_TOP_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
                     }
 
-                    val row2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        row2.forEach { k ->
+                        ALPHA_MIDDLE_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
                     }
 
-                    val row3 = listOf("z", "x", "c", "v", "b", "n", "m")
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                         SpecialKeyCap(
                             icon = if (shiftState == ShiftState.CAPS_LOCK) Icons.Default.KeyboardCapslock else Icons.Default.KeyboardArrowUp,
@@ -810,7 +837,7 @@ private fun KeyboardMainContent(
                             weight = 1.4f,
                             onClick = onToggleShift
                         )
-                        row3.forEach { k ->
+                        ALPHA_BOTTOM_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
                         }
@@ -828,23 +855,21 @@ private fun KeyboardMainContent(
             }
 
             KeyboardLayoutMode.NUMBERS_SYMBOLS -> {
-                val symRow1 = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    symRow1.forEach { s ->
+                    SYMBOL_TOP_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
-                val symRow2 = listOf("@", "#", "$", "%", "&", "-", "+", "(", ")", "/")
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    symRow2.forEach { s ->
+                    SYMBOL_MIDDLE_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     KeyCap(text = "=/<", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.MORE_SYMBOLS) })
-                    listOf("*", "\"", "'", ":", ";", "!", "?").forEach { s ->
+                    SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                     BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
@@ -860,23 +885,21 @@ private fun KeyboardMainContent(
             }
 
             KeyboardLayoutMode.MORE_SYMBOLS -> {
-                val more1 = listOf("~", "`", "|", "•", "√", "π", "÷", "×", "¶", "∆")
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    more1.forEach { s ->
+                    MORE_SYMBOL_TOP_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
-                val more2 = listOf("£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\")
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    more2.forEach { s ->
+                    MORE_SYMBOL_MIDDLE_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
-                    listOf("%", "_", "<", ">", "[", "]", "§").forEach { s ->
+                    MORE_SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
                     }
                     BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
@@ -1146,9 +1169,9 @@ private fun RowScope.BackspaceGestureKeyCap(
                                     isSwiping = true
                                     repeatJob.cancel()
                                     onStartSelection()
-                                    selectionDragPx = totalDragX
+                                    selectionDragPx = totalDragX * 1.7f
                                 } else if (didSelect) {
-                                    selectionDragPx += dragX
+                                    selectionDragPx += dragX * 1.7f
                                 }
 
                                 if (didSelect) {
@@ -1201,14 +1224,16 @@ private fun RowScope.SpaceGestureKeyCap(
         WorldLanguagesRepository.getLanguage(settings.activeLanguageId)
     }
 
-    val displayLabel = buildString {
-        if (langPack != null) {
-            append("${langPack.flag} ${langPack.name}")
-        } else {
-            when (settings.typingMethod) {
-                TypingMethod.TELEX -> append("🇻🇳 Tiếng Việt (Telex)")
-                TypingMethod.VNI -> append("🇻🇳 Tiếng Việt (VNI)")
-                TypingMethod.OFF -> append("English")
+    val displayLabel = remember(langPack, settings.typingMethod) {
+        buildString {
+            if (langPack != null) {
+                append("${langPack.flag} ${langPack.name}")
+            } else {
+                when (settings.typingMethod) {
+                    TypingMethod.TELEX -> append("🇻🇳 Tiếng Việt (Telex)")
+                    TypingMethod.VNI -> append("🇻🇳 Tiếng Việt (VNI)")
+                    TypingMethod.OFF -> append("English")
+                }
             }
         }
     }
@@ -1280,8 +1305,8 @@ private fun RowScope.SpaceGestureKeyCap(
                                         touchpadActive = true
                                         didTouchpadGesture = true
                                     }
-                                    val targetStepsX = (totalDragX / cursorStepPx).toInt()
-                                    val targetStepsY = (totalDragY / cursorStepPx).toInt()
+                                    val targetStepsX = (totalDragX * 1.4f / cursorStepPx).toInt()
+                                    val targetStepsY = (totalDragY * 1.4f / cursorStepPx).toInt()
                                     val stepsX = targetStepsX - emittedCursorStepsX
                                     val stepsY = targetStepsY - emittedCursorStepsY
                                     if (stepsX != 0 || stepsY != 0) {

@@ -1,5 +1,7 @@
 package com.example.ime.model
 
+import androidx.compose.runtime.Immutable
+
 enum class ThemeMode(val displayName: String, val description: String) {
     FOLLOW_SYSTEM("Theo hệ thống", "Tự động đổi sáng hoặc tối theo cài đặt giao diện của Android"),
     MANUAL("Tùy chọn thủ công", "Sử dụng bảng màu chủ đề do bạn chọn")
@@ -39,6 +41,7 @@ enum class KeyboardThemeId(val displayName: String) {
     HIGH_CONTRAST("Tương phản cao (Vàng - Đen)")
 }
 
+@Immutable
 data class LanguagePack(
     val id: String,
     val name: String,

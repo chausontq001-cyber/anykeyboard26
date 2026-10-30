@@ -30,6 +30,10 @@ class FunputTelexEngineInstrumentedTest {
             assertEquals("toán", engine.composedWord)
 
             engine.reset()
+            "casf".forEach { engine.processChar(it) }
+            assertEquals("cà", engine.composedWord)
+
+            engine.reset()
             "tieengs".forEach { engine.processChar(it) }
             assertEquals("tiếng", engine.composedWord)
 

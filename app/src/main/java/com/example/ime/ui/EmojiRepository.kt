@@ -1,5 +1,8 @@
 package com.example.ime.ui
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class EmojiCategory(
     val name: String,
     val icon: String,

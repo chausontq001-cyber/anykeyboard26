@@ -58,6 +58,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.attributes = window.attributes.apply {
+            preferredRefreshRate = 0f
+        }
 
         preferences = KeyboardPreferences.getInstance(this)
         refreshImeStatus()

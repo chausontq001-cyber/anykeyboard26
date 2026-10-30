@@ -72,6 +72,7 @@ import com.example.ime.engine.VietnameseEngine
 import com.example.ime.model.KeyboardAlignment
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.KeyboardSettings
+import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
 import com.example.ime.ui.ComposeKeyboardView
 import kotlin.math.abs
@@ -104,7 +105,11 @@ fun SandboxScreen(
     val testEngine = remember {
         VietnameseEngine(
             typingMethod = settings.typingMethod,
-            tonePlacement = settings.tonePlacement
+            tonePlacement = if (settings.tonePlacementEnabled) {
+                settings.tonePlacement
+            } else {
+                TonePlacement.MODERN
+            }
         )
     }
     DisposableEffect(testEngine) {
@@ -117,9 +122,13 @@ fun SandboxScreen(
     var deleteSelectionAnchor by remember { mutableIntStateOf(0) }
     var deleteSelectionEnd by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(settings.typingMethod, settings.tonePlacement) {
+    LaunchedEffect(settings.typingMethod, settings.tonePlacement, settings.tonePlacementEnabled) {
         testEngine.typingMethod = settings.typingMethod
-        testEngine.tonePlacement = settings.tonePlacement
+        testEngine.tonePlacement = if (settings.tonePlacementEnabled) {
+            settings.tonePlacement
+        } else {
+            TonePlacement.MODERN
+        }
     }
 
     fun updateSuggestions(current: String) {

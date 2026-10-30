@@ -12,3 +12,9 @@ Android packaging compiles `funput-jni` for `arm64-v8a` and `x86_64` through
 Funput's build script. Install NDK `29.0.14206865`; the Gradle build sets the
 SDK path for the native build task. The VNI implementation remains in
 `VietnameseEngine`.
+
+When a Telex key is typed after the cursor has been moved into an already
+committed word, the IME rebuilds the word's Telex sequence from the text before
+the cursor and recomposes that word. This preserves tone and vowel modifiers
+while allowing edits such as moving to the end of `cá` and typing `f` to produce
+`cà`.

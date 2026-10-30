@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ime.model.KeyboardColorScheme
 import com.example.ime.model.KeyboardSettings
 
+private val QUICK_PUNCTUATION = listOf(",", ".", "?", "!", ":", ";", "-", "@")
+
 @Composable
 fun SuggestionBarView(
     composingWord: String,
@@ -126,7 +128,7 @@ fun SuggestionBarView(
 
             // Quick punctuation if suggestions are empty
             if (suggestions.isEmpty() && composingWord.isEmpty()) {
-                listOf(",", ".", "?", "!", ":", ";", "-", "@").forEach { punct ->
+                QUICK_PUNCTUATION.forEach { punct ->
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))

@@ -1,7 +1,9 @@
 package com.example.ime.model
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.Immutable
 
+@Immutable
 data class KeyboardColorScheme(
     val id: KeyboardThemeId,
     val name: String,
