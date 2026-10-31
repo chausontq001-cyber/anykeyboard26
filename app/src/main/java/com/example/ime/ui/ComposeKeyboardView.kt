@@ -1581,7 +1581,7 @@ private fun RowScope.BackspaceGestureKeyCap(
                                 if (!didSelect) {
                                     wasLongPress = true
                                     while (isActive) {
-                                        onClick()
+                                        onTap()
                                         delay(55)
                                     }
                                 }
