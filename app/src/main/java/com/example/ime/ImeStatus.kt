@@ -12,26 +12,48 @@ object ImeStatus {
 
     fun isEnabled(context: Context): Boolean {
         val ime = component(context)
-        val enabledSetting = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_INPUT_METHODS
-        ).orEmpty()
-        val enabledInSettings = enabledSetting.split(':').any {
-            ComponentName.unflattenFromString(it.substringBefore(';')) == ime
-        }
         val manager = context.getSystemService(InputMethodManager::class.java)
         val enabledInManager = manager?.enabledInputMethodList?.any {
             it.packageName == ime.packageName && it.serviceName == ime.className
         } == true
-        return enabledInSettings || enabledInManager
+
+        if (enabledInManager) return true
+
+        val enabledSetting = try {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_INPUT_METHODS
+            ).orEmpty()
+        } catch (_: SecurityException) {
+            ""
+        } catch (_: Exception) {
+            ""
+        }
+
+        return enabledSetting.split(':').any {
+            val unflattened = ComponentName.unflattenFromString(it.substringBefore(';'))
+            unflattened == ime || (unflattened?.packageName == ime.packageName && unflattened?.className?.endsWith("VietnameseInputMethodService") == true)
+        }
     }
 
     fun isDefault(context: Context): Boolean {
-        val defaultIme = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.DEFAULT_INPUT_METHOD
-        )
-        return !defaultIme.isNullOrEmpty() &&
-            ComponentName.unflattenFromString(defaultIme) == component(context)
+        val ime = component(context)
+        val defaultIme = try {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.DEFAULT_INPUT_METHOD
+            )
+        } catch (_: SecurityException) {
+            null
+        } catch (_: Exception) {
+            null
+        }
+
+        if (!defaultIme.isNullOrEmpty()) {
+            val unflattened = ComponentName.unflattenFromString(defaultIme)
+            return unflattened == ime || (unflattened?.packageName == ime.packageName && unflattened?.className?.endsWith("VietnameseInputMethodService") == true)
+        }
+
+        return false
     }
 }

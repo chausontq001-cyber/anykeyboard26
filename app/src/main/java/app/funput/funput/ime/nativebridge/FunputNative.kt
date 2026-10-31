@@ -1,8 +1,11 @@
 package app.funput.funput.ime.nativebridge
 
 internal object FunputNative {
-    init {
+    val isLoaded = try {
         System.loadLibrary("funput_jni")
+        true
+    } catch (_: Throwable) {
+        false
     }
 
     external fun nativeCreate(): Long

@@ -375,7 +375,7 @@ fun SandboxScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Chọn AnyKeyboard26 làm bàn phím mặc định để sử dụng.",
+                        text = "Chọn Anykey26 làm bàn phím mặc định để sử dụng.",
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -473,7 +473,7 @@ fun SandboxScreen(
 
                     if (textState.text.isEmpty()) {
                         Text(
-                            text = "Chạm vào bàn phím ảo bên dưới để thử gõ...",
+                            text = "Chạm vào đây để gõ bằng bàn phím Anykey26...",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             fontSize = 15.sp
                         )
@@ -563,91 +563,6 @@ fun SandboxScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-        }
-
-        // 3. Live Interactive Keyboard Preview
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(top = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Bàn phím ảo trực quan",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    OutlinedButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.height(32.dp).testTag("btn_customize_keyboard")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Tùy chỉnh giao diện", fontSize = 11.sp)
-                    }
-                }
-
-                // Render the real interactive keyboard view right here!
-                ComposeKeyboardView(
-                    settings = settings,
-                    composingWord = composingWord,
-                    suggestions = suggestions,
-                    onKeyTyped = { c -> handleKeyTyped(c) },
-                    onBackspace = { handleBackspace() },
-                    onStartDeleteSelection = { beginDeleteSelection() },
-                    onMoveDeleteSelection = { moveDeleteSelection(it) },
-                    onFinishDeleteSelection = { finishDeleteSelection() },
-                    onSpace = { handleSpace() },
-                    onEnter = { insertTextAtCursor("\n") },
-                    onSelectSuggestion = { s -> handleSuggestionSelect(s) },
-                    onMoveCursorLeft = { moveCursorLeft() },
-                    onMoveCursorRight = { moveCursorRight() },
-                    onMoveCursorByTouchpad = { horizontal, vertical ->
-                        moveCursorByTouchpad(horizontal, vertical)
-                    },
-                    onMoveCursorStart = { moveCursorStart() },
-                    onMoveCursorEnd = { moveCursorEnd() },
-                    onSelectAll = { selectAll() },
-                    onPaste = { paste() },
-                    onSwitchIme = {
-                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                        imm?.showInputMethodPicker()
-                    },
-                    onHideKeyboard = {
-                        Toast.makeText(context, "Thanh điều hướng ảo đã sẵn sàng", Toast.LENGTH_SHORT).show()
-                    },
-                    onCycleLanguage = { cycleNextLanguage() },
-                    onToggleTypingMethod = {
-                        val next = when (settings.typingMethod) {
-                            TypingMethod.TELEX -> TypingMethod.VNI
-                            TypingMethod.VNI -> TypingMethod.OFF
-                            TypingMethod.OFF -> TypingMethod.TELEX
-                        }
-                        preferences.updateSettings { it.copy(typingMethod = next) }
-                    },
-                    onUpdateAlignment = { newAlignment ->
-                        preferences.updateSettings { it.copy(alignment = newAlignment) }
-                    },
-                    onOpenSettings = onNavigateToSettings
-                )
             }
         }
     }

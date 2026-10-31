@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "AnyKeyboard26"
+rootProject.name = "Anykey26"
 
 include(":app")

@@ -36,6 +36,8 @@ import com.example.ime.ImeStatus
 import com.example.ime.model.KeyboardPreferences
 import com.example.ui.screens.AppearanceScreen
 import com.example.ui.screens.EngineSettingsScreen
+import androidx.compose.material.icons.filled.CloudSync
+import com.example.ui.screens.AccountSyncScreen
 import com.example.ui.screens.ImeActivationScreen
 import com.example.ui.screens.LanguagesScreen
 import com.example.ui.screens.SandboxScreen
@@ -45,7 +47,8 @@ enum class NavTab(val title: String, val icon: ImageVector, val tag: String) {
     SANDBOX("Thử gõ", Icons.Default.EditNote, "tab_sandbox"),
     APPEARANCE("Giao diện", Icons.Default.Palette, "tab_appearance"),
     ENGINE("Cử chỉ & Gõ", Icons.Default.Tune, "tab_engine"),
-    LANGUAGES("Ngôn ngữ", Icons.Default.Public, "tab_languages")
+    LANGUAGES("Ngôn ngữ", Icons.Default.Public, "tab_languages"),
+    SYNC("Đồng bộ", Icons.Default.CloudSync, "tab_sync")
 }
 
 class MainActivity : ComponentActivity() {
@@ -84,7 +87,7 @@ class MainActivity : ComponentActivity() {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
-                                        text = "AnyKeyboard26",
+                                        text = "Anykey26",
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleMedium
                                     )
@@ -127,6 +130,7 @@ class MainActivity : ComponentActivity() {
                                 1 -> AppearanceScreen(preferences = preferences)
                                 2 -> EngineSettingsScreen(preferences = preferences)
                                 3 -> LanguagesScreen(preferences = preferences)
+                                4 -> AccountSyncScreen(preferences = preferences)
                             }
                         }
                     }

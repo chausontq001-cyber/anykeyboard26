@@ -85,40 +85,56 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  packaging {
+    resources {
+      excludes += listOf(
+        "META-INF/DEPENDENCIES",
+        "META-INF/LICENSE",
+        "META-INF/LICENSE.txt",
+        "META-INF/license.txt",
+        "META-INF/NOTICE",
+        "META-INF/NOTICE.txt",
+        "META-INF/notice.txt",
+        "META-INF/ASL2.0"
+      )
+    }
+  }
   sourceSets["main"].jniLibs.directories.add(funputJniLibs.get().asFile.absolutePath)
 }
 
-val buildFunputJniTasks = funputRustTargets.map { (abi, rustTarget) ->
-  val taskSuffix = abi.split('-').joinToString("") { it.replaceFirstChar(Char::uppercase) }
-  val abiOutputDirectory = layout.buildDirectory.dir("generated/funput/jniLibs/$abi")
-  val outputDirectoryPath = abiOutputDirectory.get().asFile.absolutePath
-  tasks.register<Exec>("buildFunput${taskSuffix}Jni") {
-    group = "build"
-    description = "Builds Funput's Rust JNI engine for $abi."
-    inputs.files(fileTree(funputRoot) {
-      include("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/**")
-    })
-    inputs.file(funputBuildScript)
-    inputs.property("rustTarget", rustTarget)
-    inputs.property("ndkVersion", funputNdkVersion)
-    outputs.file("$outputDirectoryPath/libfunput_jni.so")
-    if (androidSdkPath != null) {
-      environment("ANDROID_SDK_ROOT", androidSdkPath)
+if (funputBuildScript.isFile) {
+  val buildFunputJniTasks = funputRustTargets.map { (abi, rustTarget) ->
+    val taskSuffix = abi.split('-').joinToString("") { it.replaceFirstChar(Char::uppercase) }
+    val abiOutputDirectory = layout.buildDirectory.dir("generated/funput/jniLibs/$abi")
+    val outputDirectoryPath = abiOutputDirectory.get().asFile.absolutePath
+    tasks.register<Exec>("buildFunput${taskSuffix}Jni") {
+      group = "build"
+      description = "Builds Funput's Rust JNI engine for $abi."
+      inputs.files(fileTree(funputRoot) {
+        include("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/**")
+      })
+      inputs.file(funputBuildScript)
+      inputs.property("rustTarget", rustTarget)
+      inputs.property("ndkVersion", funputNdkVersion)
+      outputs.file("$outputDirectoryPath/libfunput_jni.so")
+      if (androidSdkPath != null) {
+        environment("ANDROID_SDK_ROOT", androidSdkPath)
+      }
+      commandLine(
+        "bash",
+        funputBuildScript.absolutePath,
+        rustTarget,
+        abi,
+        "release",
+        outputDirectoryPath,
+        funputNdkVersion
+      )
     }
-    commandLine(
-      "bash",
-      funputBuildScript.absolutePath,
-      rustTarget,
-      abi,
-      "release",
-      outputDirectoryPath,
-      funputNdkVersion
-    )
   }
-}
 
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }
-  .configureEach { dependsOn(buildFunputJniTasks) }
+  tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }
+    .configureEach { dependsOn(buildFunputJniTasks) }
+}
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
@@ -176,6 +192,19 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+
+  // Google Drive API & Credential Manager (BƯỚC 1)
+  implementation("androidx.credentials:credentials:1.3.0")
+  implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+  implementation("com.google.android.gms:play-services-auth:20.7.0")
+  implementation("com.google.apis:google-api-services-drive:v3-rev20230822-2.0.0") {
+    exclude(group = "org.apache.httpcomponents")
+  }
+  implementation("com.google.api-client:google-api-client-android:2.2.0") {
+    exclude(group = "org.apache.httpcomponents")
+    exclude(group = "com.google.guava", module = "listenablefuture")
+  }
+  implementation("com.google.code.gson:gson:2.10.1")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

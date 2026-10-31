@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AnyKeyboard26</string>
-    <string name="ime_service_name">AnyKeyboard26</string>
+    <string name="app_name">Anykey26</string>
+    <string name="ime_service_name">Anykey26</string>
     <string name="ime_subtype_vietnamese">Tiếng Việt</string>
 </resources>

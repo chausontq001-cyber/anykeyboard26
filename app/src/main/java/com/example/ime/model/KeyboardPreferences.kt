@@ -50,7 +50,9 @@ data class KeyboardSettings(
     // Floating & Split keyboard options
     val displayStyle: KeyboardDisplayStyle = KeyboardDisplayStyle.DOCKED,
     val autoSplitInLandscape: Boolean = true,
-    val floatingScalePercent: Int = 80
+    val floatingScalePercent: Int = 80,
+    // Popup key preview effect
+    val showKeyPreview: Boolean = true
 )
 
 class KeyboardPreferences(context: Context) {
@@ -145,7 +147,8 @@ class KeyboardPreferences(context: Context) {
                 prefs.getString(KEY_DISPLAY_STYLE, KeyboardDisplayStyle.DOCKED.name) ?: KeyboardDisplayStyle.DOCKED.name
             ),
             autoSplitInLandscape = prefs.getBoolean(KEY_AUTO_SPLIT_LANDSCAPE, true),
-            floatingScalePercent = prefs.getInt(KEY_FLOATING_SCALE, 80)
+            floatingScalePercent = prefs.getInt(KEY_FLOATING_SCALE, 80),
+            showKeyPreview = prefs.getBoolean(KEY_SHOW_KEY_PREVIEW, true)
         )
     }
 
@@ -197,8 +200,31 @@ class KeyboardPreferences(context: Context) {
             putString(KEY_DISPLAY_STYLE, updated.displayStyle.name)
             putBoolean(KEY_AUTO_SPLIT_LANDSCAPE, updated.autoSplitInLandscape)
             putInt(KEY_FLOATING_SCALE, updated.floatingScalePercent)
+            putBoolean(KEY_SHOW_KEY_PREVIEW, updated.showKeyPreview)
             apply()
         }
+    }
+
+    fun exportSettingsMap(): Map<String, Any?> {
+        return prefs.all
+    }
+
+    fun importSettingsMap(map: Map<String, Any?>) {
+        val editor = prefs.edit()
+        for ((key, value) in map) {
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> @Suppress("UNCHECKED_CAST") editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                is List<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                is Number -> editor.putInt(key, value.toInt())
+            }
+        }
+        editor.apply()
+        reloadSettings()
     }
 
     companion object {
@@ -237,6 +263,7 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_DISPLAY_STYLE = "display_style"
         private const val KEY_AUTO_SPLIT_LANDSCAPE = "auto_split_landscape"
         private const val KEY_FLOATING_SCALE = "floating_scale"
+        private const val KEY_SHOW_KEY_PREVIEW = "show_key_preview"
 
         @Volatile
         private var instance: KeyboardPreferences? = null

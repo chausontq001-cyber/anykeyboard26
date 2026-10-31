@@ -5,6 +5,9 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -36,22 +39,29 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.zIndex
+import android.view.inputmethod.EditorInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloseFullscreen
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardCapslock
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.VerticalAlignBottom
@@ -70,9 +80,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -111,8 +125,8 @@ enum class KeyboardLayoutMode {
 }
 
 enum class ShiftState {
-    OFF,
-    ONCE,
+    LOWER,
+    SHIFT_ONCE,
     CAPS_LOCK
 }
 
@@ -159,6 +173,8 @@ fun ComposeKeyboardView(
     onUpdateAlignment: (KeyboardAlignment) -> Unit,
     onOpenSettings: () -> Unit,
     hideVirtualNavigationBar: Boolean = false,
+    imeAction: Int = EditorInfo.IME_ACTION_NONE,
+    isMultiline: Boolean = false,
     onUpdateDisplayStyle: ((KeyboardDisplayStyle) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -198,7 +214,7 @@ fun ComposeKeyboardView(
     var floatingOffsetY by remember { mutableFloatStateOf(0f) }
 
     var layoutMode by remember { mutableStateOf(KeyboardLayoutMode.ALPHA) }
-    var shiftState by remember { mutableStateOf(ShiftState.OFF) }
+    var shiftState by remember { mutableStateOf(ShiftState.LOWER) }
 
     fun triggerHaptic() {
         if (keyboardSettings.hapticFeedback && vibrator != null) {
@@ -317,7 +333,12 @@ fun ComposeKeyboardView(
                         layoutMode = layoutMode,
                         shiftState = shiftState,
                         triggerHaptic = { triggerHaptic() },
-                        onKeyTyped = onKeyTyped,
+                        onKeyTyped = { c ->
+                            onKeyTyped(c)
+                            if (shiftState == ShiftState.SHIFT_ONCE) {
+                                shiftState = ShiftState.LOWER
+                            }
+                        },
                         onBackspace = onBackspace,
                         onStartDeleteSelection = onStartDeleteSelection,
                         onMoveDeleteSelection = onMoveDeleteSelection,
@@ -338,9 +359,9 @@ fun ComposeKeyboardView(
                         onToggleShift = {
                             triggerHaptic()
                             shiftState = when (shiftState) {
-                                ShiftState.OFF -> ShiftState.ONCE
-                                ShiftState.ONCE -> ShiftState.CAPS_LOCK
-                                ShiftState.CAPS_LOCK -> ShiftState.OFF
+                                ShiftState.LOWER -> ShiftState.SHIFT_ONCE
+                                ShiftState.SHIFT_ONCE -> ShiftState.CAPS_LOCK
+                                ShiftState.CAPS_LOCK -> ShiftState.LOWER
                             }
                         },
                         onSwitchLayout = { mode ->
@@ -350,7 +371,9 @@ fun ComposeKeyboardView(
                         onToggleTypingMethod = onToggleTypingMethod,
                         onUpdateAlignment = onUpdateAlignment,
                         onOpenSettings = onOpenSettings,
-                        hideVirtualNavigationBar = hideVirtualNavigationBar
+                        hideVirtualNavigationBar = hideVirtualNavigationBar,
+                        imeAction = imeAction,
+                        isMultiline = isMultiline
                     )
                 }
             }
@@ -374,7 +397,12 @@ fun ComposeKeyboardView(
                 layoutMode = layoutMode,
                 shiftState = shiftState,
                 triggerHaptic = { triggerHaptic() },
-                onKeyTyped = onKeyTyped,
+                onKeyTyped = { c ->
+                    onKeyTyped(c)
+                    if (shiftState == ShiftState.SHIFT_ONCE) {
+                        shiftState = ShiftState.LOWER
+                    }
+                },
                 onBackspace = onBackspace,
                 onStartDeleteSelection = onStartDeleteSelection,
                 onMoveDeleteSelection = onMoveDeleteSelection,
@@ -395,9 +423,9 @@ fun ComposeKeyboardView(
                 onToggleShift = {
                     triggerHaptic()
                     shiftState = when (shiftState) {
-                        ShiftState.OFF -> ShiftState.ONCE
-                        ShiftState.ONCE -> ShiftState.CAPS_LOCK
-                        ShiftState.CAPS_LOCK -> ShiftState.OFF
+                        ShiftState.LOWER -> ShiftState.SHIFT_ONCE
+                        ShiftState.SHIFT_ONCE -> ShiftState.CAPS_LOCK
+                        ShiftState.CAPS_LOCK -> ShiftState.LOWER
                     }
                 },
                 onSwitchLayout = { mode ->
@@ -407,7 +435,9 @@ fun ComposeKeyboardView(
                 onToggleTypingMethod = onToggleTypingMethod,
                 onUpdateAlignment = onUpdateAlignment,
                 onOpenSettings = onOpenSettings,
-                hideVirtualNavigationBar = hideVirtualNavigationBar
+                hideVirtualNavigationBar = hideVirtualNavigationBar,
+                imeAction = imeAction,
+                isMultiline = isMultiline
             )
             }
         }
@@ -449,7 +479,9 @@ private fun KeyboardContentWrapper(
     onToggleTypingMethod: () -> Unit,
     onUpdateAlignment: (KeyboardAlignment) -> Unit,
     onOpenSettings: () -> Unit,
-    hideVirtualNavigationBar: Boolean
+    hideVirtualNavigationBar: Boolean,
+    imeAction: Int = EditorInfo.IME_ACTION_NONE,
+    isMultiline: Boolean = false
 ) {
     // 1. Suggestion Bar
     if (settings.showSuggestions || composingWord.isNotEmpty()) {
@@ -513,7 +545,9 @@ private fun KeyboardContentWrapper(
                     },
                     onToggleShift = onToggleShift,
                     onSwitchLayout = onSwitchLayout,
-                    onToggleTypingMethod = onToggleTypingMethod
+                    onToggleTypingMethod = onToggleTypingMethod,
+                    imeAction = imeAction,
+                    isMultiline = isMultiline
                 )
             }
 
@@ -575,7 +609,9 @@ private fun KeyboardContentWrapper(
                     },
                     onToggleShift = onToggleShift,
                     onSwitchLayout = onSwitchLayout,
-                    onToggleTypingMethod = onToggleTypingMethod
+                    onToggleTypingMethod = onToggleTypingMethod,
+                    imeAction = imeAction,
+                    isMultiline = isMultiline
                 )
             }
         } else {
@@ -620,7 +656,9 @@ private fun KeyboardContentWrapper(
                     },
                     onToggleShift = onToggleShift,
                     onSwitchLayout = onSwitchLayout,
-                    onToggleTypingMethod = onToggleTypingMethod
+                    onToggleTypingMethod = onToggleTypingMethod,
+                    imeAction = imeAction,
+                    isMultiline = isMultiline
                 )
             }
         }
@@ -689,8 +727,20 @@ private fun KeyboardMainContent(
     onCycleLanguage: () -> Unit,
     onToggleShift: () -> Unit,
     onSwitchLayout: (KeyboardLayoutMode) -> Unit,
-    onToggleTypingMethod: () -> Unit
+    onToggleTypingMethod: () -> Unit,
+    imeAction: Int = EditorInfo.IME_ACTION_NONE,
+    isMultiline: Boolean = false
 ) {
+    val (enterIcon, enterDesc) = when {
+        isMultiline -> Icons.AutoMirrored.Filled.KeyboardReturn to "Xuống dòng"
+        imeAction == EditorInfo.IME_ACTION_SEARCH -> Icons.Default.Search to "Tìm kiếm"
+        imeAction == EditorInfo.IME_ACTION_SEND -> Icons.AutoMirrored.Filled.Send to "Gửi"
+        imeAction == EditorInfo.IME_ACTION_DONE -> Icons.Default.Done to "Hoàn tất"
+        imeAction == EditorInfo.IME_ACTION_GO -> Icons.AutoMirrored.Filled.ArrowForward to "Đi tới"
+        else -> Icons.AutoMirrored.Filled.KeyboardReturn to "Enter"
+    }
+
+    val isUpper = (shiftState == ShiftState.SHIFT_ONCE || shiftState == ShiftState.CAPS_LOCK)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(settings.rowSpacingDp.dp)
@@ -716,7 +766,7 @@ private fun KeyboardMainContent(
 
         when (layoutMode) {
             KeyboardLayoutMode.ALPHA -> {
-                val isUpper = shiftState != ShiftState.OFF
+                val isUpper = shiftState != ShiftState.LOWER
 
                 if (isSplit) {
                     // SPLIT KEYBOARD LAYOUT (Left and Right thumb clusters with center space)
@@ -762,21 +812,22 @@ private fun KeyboardMainContent(
                     ) {
                         SpecialKeyCap(
                             icon = if (shiftState == ShiftState.CAPS_LOCK) Icons.Default.KeyboardCapslock else Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Shift",
+                            contentDescription = if (shiftState == ShiftState.CAPS_LOCK) "Caps Lock" else if (shiftState == ShiftState.SHIFT_ONCE) "Shift (1 lần)" else "Shift",
                             colorScheme = colorScheme,
-                            isActive = shiftState != ShiftState.OFF,
+                            isActive = shiftState != ShiftState.LOWER,
+                            isAccent = shiftState == ShiftState.CAPS_LOCK,
                             height = baseKeyHeight,
                             weight = 1.3f,
                             onClick = onToggleShift
                         )
                         SPLIT_BOTTOM_LEFT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
-                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
+                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
                         Spacer(modifier = Modifier.weight(1.8f))
                         SPLIT_BOTTOM_RIGHT_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
-                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
+                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
                         BackspaceGestureKeyCap(
                             colorScheme = colorScheme,
@@ -796,7 +847,7 @@ private fun KeyboardMainContent(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.2f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
+                        KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.2f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
 
@@ -808,48 +859,49 @@ private fun KeyboardMainContent(
                         }
 
                         SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, onClick = { onKeyTyped('.') })
-                        SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.2f, onClick = onEnter)
+                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.2f, onClick = onEnter)
                     }
                 } else {
                     // STANDARD FULL DOCKED KEYBOARD
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         ALPHA_TOP_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
-                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
+                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
                     }
 
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         ALPHA_MIDDLE_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
-                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
+                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                         SpecialKeyCap(
                             icon = if (shiftState == ShiftState.CAPS_LOCK) Icons.Default.KeyboardCapslock else Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Shift",
+                            contentDescription = if (shiftState == ShiftState.CAPS_LOCK) "Caps Lock" else if (shiftState == ShiftState.SHIFT_ONCE) "Shift (1 lần)" else "Shift",
                             colorScheme = colorScheme,
-                            isActive = shiftState != ShiftState.OFF,
+                            isActive = shiftState != ShiftState.LOWER,
+                            isAccent = shiftState == ShiftState.CAPS_LOCK,
                             height = baseKeyHeight,
                             weight = 1.4f,
                             onClick = onToggleShift
                         )
                         ALPHA_BOTTOM_KEYS.forEach { k ->
                             val display = if (isUpper) k.uppercase() else k
-                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(display.first()) })
+                            KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
                         BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
+                        KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped('.') })
-                        SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
+                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                     }
                 }
             }
@@ -857,60 +909,60 @@ private fun KeyboardMainContent(
             KeyboardLayoutMode.NUMBERS_SYMBOLS -> {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     SYMBOL_TOP_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     SYMBOL_MIDDLE_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    KeyCap(text = "=/<", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.MORE_SYMBOLS) })
+                    KeyCap(text = "=/<", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.MORE_SYMBOLS) })
                     SYMBOL_BOTTOM_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                     BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
+                    KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
                     SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                     SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                    KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(',') })
-                    SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
+                    KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
+                    SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
             }
 
             KeyboardLayoutMode.MORE_SYMBOLS -> {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     MORE_SYMBOL_TOP_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     MORE_SYMBOL_MIDDLE_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
+                    KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                     MORE_SYMBOL_BOTTOM_KEYS.forEach { s ->
-                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, onClick = { onKeyTyped(s.first()) })
+                        KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
                     BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
+                    KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
                     SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                     SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                    KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, onClick = { onKeyTyped('.') })
-                    SpecialKeyCap(icon = Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Nhập", colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
+                    KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                    SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
             }
 
@@ -1022,38 +1074,221 @@ private fun RowScope.KeyCap(
     fontSize: androidx.compose.ui.unit.TextUnit,
     weight: Float,
     isSpecial: Boolean = false,
+    showPreview: Boolean = true,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val bg = when {
-        isPressed -> colorScheme.accentActionColor.copy(alpha = 0.35f)
-        isSpecial -> colorScheme.specialKeyColor
-        else -> colorScheme.keyBackgroundColor
+    // Glassmorphism Popup Animation (YÊU CẦU 1): Scale từ 0.8 lên 1.0 kèm fade-in
+    val popupScale by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0.8f,
+        animationSpec = spring(dampingRatio = 0.68f, stiffness = 850f),
+        label = "glassPopupScale"
+    )
+    val popupAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = tween(durationMillis = 100),
+        label = "glassPopupAlpha"
+    )
+
+    // Hiệu ứng phím Glassmorphism khi bấm (YÊU CẦU 2)
+    val baseKeyColor = if (isSpecial) colorScheme.specialKeyColor else colorScheme.keyBackgroundColor
+    val keyBorderColor = if (isPressed) {
+        if (colorScheme.isDark) Color.White.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.80f)
+    } else {
+        colorScheme.borderColor.copy(alpha = 0.35f)
+    }
+
+    val density = LocalDensity.current
+    val popupBubbleShape = remember(density) {
+        GenericShape { size, _ ->
+            val w = size.width
+            val h = size.height
+            val r = with(density) { 16.dp.toPx() }
+            val pointerHalfWidth = with(density) { 8.dp.toPx() }
+            val pointerHeight = with(density) { 9.dp.toPx() }
+            val bodyHeight = h - pointerHeight
+            val cx = w / 2f
+
+            // Thân trên bo tròn 16dp
+            moveTo(r, 0f)
+            lineTo(w - r, 0f)
+            quadraticTo(w, 0f, w, r)
+            lineTo(w, bodyHeight - r)
+            quadraticTo(w, bodyHeight, w - r, bodyHeight)
+
+            // Đáy bên phải nối vào mũi nhọn
+            lineTo(cx + pointerHalfWidth, bodyHeight)
+            // Mũi nhọn hướng xuống tâm phím
+            lineTo(cx, h)
+            // Đáy bên trái mũi nhọn
+            lineTo(cx - pointerHalfWidth, bodyHeight)
+
+            // Bo tròn đáy trái
+            lineTo(r, bodyHeight)
+            quadraticTo(0f, bodyHeight, 0f, bodyHeight - r)
+            lineTo(0f, r)
+            quadraticTo(0f, 0f, r, 0f)
+            close()
+        }
     }
 
     Box(
         modifier = Modifier
             .weight(weight)
             .height(height)
-            .shadow(if (isPressed) 0.dp else 1.dp, RoundedCornerShape(7.dp))
-            .clip(RoundedCornerShape(7.dp))
-            .background(bg)
-            .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(color = colorScheme.accentActionColor)
-            ) { onClick() }
-            .testTag("key_$text"),
+            .zIndex(if (isPressed || popupAlpha > 0.01f) 100f else 0f),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            color = if (isSpecial) colorScheme.secondaryTextColor else colorScheme.primaryTextColor,
-            fontSize = fontSize,
-            fontWeight = if (isSpecial) FontWeight.SemiBold else FontWeight.Medium
-        )
+        // Khối phím bấm
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .shadow(
+                    elevation = if (isPressed) 3.dp else 1.dp,
+                    shape = RoundedCornerShape(8.dp),
+                    spotColor = if (isPressed) colorScheme.accentActionColor.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.2f)
+                )
+                .clip(RoundedCornerShape(8.dp))
+                .background(baseKeyColor)
+                .border(
+                    width = if (isPressed) 1.dp else 0.5.dp,
+                    color = keyBorderColor,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(color = colorScheme.accentActionColor.copy(alpha = 0.45f))
+                ) { onClick() }
+                .testTag("key_$text"),
+            contentAlignment = Alignment.Center
+        ) {
+            // Lớp phủ kính mờ (Translucent Glass Overlay) khi bấm phím
+            if (isPressed) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = if (colorScheme.isDark) {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.22f),
+                                        colorScheme.accentActionColor.copy(alpha = 0.38f)
+                                    )
+                                )
+                            } else {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.60f),
+                                        colorScheme.accentActionColor.copy(alpha = 0.28f)
+                                    )
+                                )
+                            }
+                        )
+                )
+
+                // Vệt phản chiếu ánh sáng kính ở mép trên
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.2.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = if (colorScheme.isDark) 0.6f else 0.85f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+
+            Text(
+                text = text,
+                color = if (isSpecial) colorScheme.secondaryTextColor else colorScheme.primaryTextColor,
+                fontSize = fontSize,
+                fontWeight = if (isSpecial) FontWeight.SemiBold else FontWeight.Medium
+            )
+        }
+
+        // Popup xem trước phím dạng Glassmorphism hình giọt nước có mũi nhọn nhô xuống
+        if (showPreview && (isPressed || popupAlpha > 0.05f) && !isSpecial) {
+            Box(
+                modifier = Modifier
+                    .offset(y = (-64).dp)
+                    .size(width = 56.dp, height = 65.dp)
+                    .scale(popupScale)
+                    .alpha(popupAlpha)
+                    .zIndex(200f)
+                    .shadow(
+                        elevation = 14.dp,
+                        shape = popupBubbleShape,
+                        ambientColor = Color.Black.copy(alpha = 0.50f),
+                        spotColor = Color.Black.copy(alpha = 0.65f)
+                    )
+                    .clip(popupBubbleShape)
+                    .background(
+                        brush = if (colorScheme.isDark) {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.25f), // Mặt kính sáng trên cùng
+                                    Color(0xFF262C3A).copy(alpha = 0.65f), // Kính mờ thân popup
+                                    Color(0xFF141720).copy(alpha = 0.90f)  // Đáy kính đậm
+                                )
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.95f),
+                                    Color(0xFFF0F3F8).copy(alpha = 0.70f),
+                                    Color(0xFFD6DBE4).copy(alpha = 0.88f)
+                                )
+                            )
+                        }
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
+                        shape = popupBubbleShape
+                    ),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                // Vệt phản quang mặt kính mép trên của popup
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.75f)
+                        .height(1.5.dp)
+                        .padding(top = 2.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = if (colorScheme.isDark) 0.70f else 0.90f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                // KÝ TỰ PHÍM: Lớp trên cùng, độ tương phản cao tuyệt đối, không bị blur
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = text,
+                        color = if (colorScheme.isDark) Color(0xFFFFFFFF) else Color(0xFF12151B),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1071,10 +1306,9 @@ private fun RowScope.SpecialKeyCap(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val bg = when {
-        isPressed -> colorScheme.accentActionColor.copy(alpha = 0.4f)
+    val baseBg = when {
         isAccent -> colorScheme.accentActionColor
-        isActive -> colorScheme.accentActionColor.copy(alpha = 0.25f)
+        isActive -> colorScheme.accentActionColor.copy(alpha = 0.28f)
         else -> colorScheme.specialKeyColor
     }
 
@@ -1084,27 +1318,100 @@ private fun RowScope.SpecialKeyCap(
         else -> colorScheme.secondaryTextColor
     }
 
+    val keyBorderColor = if (isPressed) {
+        if (colorScheme.isDark) Color.White.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.80f)
+    } else if (isActive) {
+        colorScheme.accentActionColor.copy(alpha = 0.6f)
+    } else {
+        colorScheme.borderColor.copy(alpha = 0.4f)
+    }
+
     Box(
         modifier = Modifier
             .weight(weight)
             .height(height)
-            .shadow(if (isPressed) 0.dp else 1.dp, RoundedCornerShape(7.dp))
-            .clip(RoundedCornerShape(7.dp))
-            .background(bg)
-            .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
+            .shadow(
+                elevation = if (isPressed) 3.dp else 1.dp,
+                shape = RoundedCornerShape(8.dp),
+                spotColor = if (isPressed) colorScheme.accentActionColor.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.2f)
+            )
+            .clip(RoundedCornerShape(8.dp))
+            .background(baseBg)
+            .border(
+                width = if (isPressed || isActive) 1.dp else 0.5.dp,
+                color = keyBorderColor,
+                shape = RoundedCornerShape(8.dp)
+            )
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = colorScheme.accentActionColor)
+                indication = ripple(color = colorScheme.accentActionColor.copy(alpha = 0.45f))
             ) { onClick() }
             .testTag("special_key_$contentDescription"),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = iconTint,
-            modifier = Modifier.size(21.dp)
-        )
+        // Lớp phủ kính mờ khi ấn phím đặc biệt
+        if (isPressed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = if (colorScheme.isDark) {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.22f),
+                                    colorScheme.accentActionColor.copy(alpha = 0.38f)
+                                )
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.55f),
+                                    colorScheme.accentActionColor.copy(alpha = 0.28f)
+                                )
+                            )
+                        }
+                    )
+            )
+
+            // Vệt sáng kính phản chiếu
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.2.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = if (colorScheme.isDark) 0.6f else 0.85f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+                modifier = Modifier.size(21.dp)
+            )
+            if (contentDescription == "Caps Lock") {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .width(14.dp)
+                        .height(2.5.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(iconTint)
+                )
+            }
+        }
     }
 }
 

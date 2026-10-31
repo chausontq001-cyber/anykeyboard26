@@ -49,7 +49,7 @@ class VietnameseInputMethodService : InputMethodService(),
     SavedStateRegistryOwner {
 
     companion object {
-        private const val TAG = "AnyKeyboard26"
+        private const val TAG = "Anykey26"
         private const val MAX_TELEX_WORD_LENGTH = 128
     }
 
@@ -68,6 +68,8 @@ class VietnameseInputMethodService : InputMethodService(),
     private var suggestionsState by mutableStateOf<List<String>>(emptyList())
     private var lastCommittedWord: String? = null
     private var hideVirtualNavigationBarState by mutableStateOf(false)
+    private var currentImeActionState by mutableStateOf(EditorInfo.IME_ACTION_NONE)
+    private var isMultilineState by mutableStateOf(false)
     private var deleteSelectionAnchor: Int? = null
     private var deleteSelectionEnd = 0
     private var deleteSelectionBounds: IntRange? = null
@@ -209,6 +211,8 @@ class VietnameseInputMethodService : InputMethodService(),
                             startActivity(intent)
                         },
                         hideVirtualNavigationBar = hideVirtualNavigationBarState,
+                        imeAction = currentImeActionState,
+                        isMultiline = isMultilineState,
                         onUpdateDisplayStyle = { newStyle ->
                             preferences.updateSettings { it.copy(displayStyle = newStyle) }
                         }
@@ -223,6 +227,16 @@ class VietnameseInputMethodService : InputMethodService(),
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         initWindowDecorView()
+        if (info != null) {
+            val isMulti = (info.inputType and android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+            val rawAction = info.imeOptions and EditorInfo.IME_MASK_ACTION
+            val hasNoEnterAction = (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+            currentImeActionState = if (isMulti && hasNoEnterAction) EditorInfo.IME_ACTION_NONE else rawAction
+            isMultilineState = isMulti
+        } else {
+            currentImeActionState = EditorInfo.IME_ACTION_NONE
+            isMultilineState = false
+        }
         try {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -509,11 +523,16 @@ class VietnameseInputMethodService : InputMethodService(),
             commitComposingWord()
         }
         val info = currentInputEditorInfo
+        val isMulti = info?.let { (it.inputType and android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0 } ?: false
         val imeAction = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
-        if (imeAction != EditorInfo.IME_ACTION_NONE && imeAction != EditorInfo.IME_ACTION_UNSPECIFIED) {
-            ic.performEditorAction(imeAction)
-        } else {
-            sendKeyChar('\n')
+
+        when {
+            !isMulti && imeAction == EditorInfo.IME_ACTION_SEARCH -> ic.performEditorAction(EditorInfo.IME_ACTION_SEARCH)
+            !isMulti && imeAction == EditorInfo.IME_ACTION_SEND -> ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
+            !isMulti && imeAction == EditorInfo.IME_ACTION_DONE -> ic.performEditorAction(EditorInfo.IME_ACTION_DONE)
+            !isMulti && imeAction == EditorInfo.IME_ACTION_GO -> ic.performEditorAction(EditorInfo.IME_ACTION_GO)
+            !isMulti && imeAction != EditorInfo.IME_ACTION_NONE && imeAction != EditorInfo.IME_ACTION_UNSPECIFIED -> ic.performEditorAction(imeAction)
+            else -> sendKeyChar('\n')
         }
     }
 

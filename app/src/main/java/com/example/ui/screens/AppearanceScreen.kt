@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,25 +21,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AlignHorizontalCenter
-import androidx.compose.material.icons.filled.AlignHorizontalLeft
-import androidx.compose.material.icons.filled.AlignHorizontalRight
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Height
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SmartButton
 import androidx.compose.material.icons.filled.ViewSidebar
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -45,19 +49,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ime.model.KeyboardAlignment
-import com.example.ime.model.KeyboardColorScheme
+import com.example.ime.model.KeyboardDisplayStyle
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.KeyboardThemeId
 import com.example.ime.model.KeyboardThemes
+import com.example.ime.model.ThemeMode
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -66,628 +76,611 @@ fun AppearanceScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by preferences.settings.collectAsState()
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    var expandedGroupId by remember { mutableStateOf<String?>("group_theme") }
 
-    Column(
+    fun toggleGroup(groupId: String, index: Int) {
+        val willOpen = expandedGroupId != groupId
+        expandedGroupId = if (willOpen) groupId else null
+        if (willOpen) {
+            coroutineScope.launch {
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Section 1: Themes & Colors
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            modifier = Modifier.fillMaxWidth().testTag("theme_selection_card")
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        // Nhóm 1: Chủ đề & Màu sắc
+        item {
+            val isExpanded = expandedGroupId == "group_theme"
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("accordion_group_theme")
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Palette,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                Column {
+                    AccordionHeader(
+                        title = "Chủ đề & Màu sắc",
+                        subtitle = "Chế độ hệ thống Sáng/Tối & các bảng màu đẹp",
+                        icon = Icons.Default.Palette,
+                        isExpanded = isExpanded,
+                        onClick = { toggleGroup("group_theme", 0) }
                     )
-                    Text(
-                        text = "Chủ đề & Màu sắc bàn phím",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
 
-                // 1. Follow System vs Manual Theme Mode
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // System Mode Option
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (settings.themeMode == com.example.ime.model.ThemeMode.FOLLOW_SYSTEM) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                }
-                            )
-                            .border(
-                                width = if (settings.themeMode == com.example.ime.model.ThemeMode.FOLLOW_SYSTEM) 2.dp else 1.dp,
-                                color = if (settings.themeMode == com.example.ime.model.ThemeMode.FOLLOW_SYSTEM) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                },
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                preferences.updateSettings { it.copy(themeMode = com.example.ime.model.ThemeMode.FOLLOW_SYSTEM) }
-                            }
-                            .padding(14.dp)
-                            .testTag("theme_mode_system")
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🌙 Theo chế độ hệ thống Android",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Tự động đổi màu Tối khi máy bật Dark mode, và màu Sáng khi máy ở Light mode.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            androidx.compose.material3.RadioButton(
-                                selected = settings.themeMode == com.example.ime.model.ThemeMode.FOLLOW_SYSTEM,
-                                onClick = {
-                                    preferences.updateSettings { it.copy(themeMode = com.example.ime.model.ThemeMode.FOLLOW_SYSTEM) }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            // 1. Chế độ theo hệ thống
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (settings.themeMode == ThemeMode.FOLLOW_SYSTEM) {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                        }
+                                    )
+                                    .border(
+                                        width = if (settings.themeMode == ThemeMode.FOLLOW_SYSTEM) 2.dp else 1.dp,
+                                        color = if (settings.themeMode == ThemeMode.FOLLOW_SYSTEM) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        },
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        preferences.updateSettings { it.copy(themeMode = ThemeMode.FOLLOW_SYSTEM) }
+                                    }
+                                    .padding(14.dp)
+                                    .testTag("theme_mode_system")
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "🌙 Theo chế độ hệ thống Android",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Tự động đổi màu Tối khi máy bật Dark mode, và màu Sáng khi ở Light mode.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (settings.themeMode == ThemeMode.FOLLOW_SYSTEM) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
-                            )
-                        }
-                    }
-
-                    // Manual Theme Option
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (settings.themeMode == com.example.ime.model.ThemeMode.MANUAL) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                }
-                            )
-                            .border(
-                                width = if (settings.themeMode == com.example.ime.model.ThemeMode.MANUAL) 2.dp else 1.dp,
-                                color = if (settings.themeMode == com.example.ime.model.ThemeMode.MANUAL) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                },
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                preferences.updateSettings { it.copy(themeMode = com.example.ime.model.ThemeMode.MANUAL) }
                             }
-                            .padding(14.dp)
-                            .testTag("theme_mode_manual")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🎨 Chọn chủ đề màu thủ công",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Cố định màu sắc bàn phím theo một trong 7 bộ phối màu đặc sắc bên dưới.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            androidx.compose.material3.RadioButton(
-                                selected = settings.themeMode == com.example.ime.model.ThemeMode.MANUAL,
-                                onClick = {
-                                    preferences.updateSettings { it.copy(themeMode = com.example.ime.model.ThemeMode.MANUAL) }
-                                }
-                            )
-                        }
-                    }
-                }
 
-                // Themes Grid / List (highlighted when manual)
-                Text(
-                    text = "Bảng màu sẵn có:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                KeyboardThemes.allThemes.forEach { theme ->
-                    val isSelected = settings.themeId == theme.id && settings.themeMode == com.example.ime.model.ThemeMode.MANUAL
-
-                    ThemePreviewItem(
-                        theme = theme,
-                        isSelected = isSelected,
-                        onClick = {
-                            preferences.updateSettings {
-                                it.copy(
-                                    themeId = theme.id,
-                                    themeMode = com.example.ime.model.ThemeMode.MANUAL
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-        }
-
-        // Section 2: Size & Dimensions
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            modifier = Modifier.fillMaxWidth().testTag("size_adjustment_card")
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Height,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "Điều chỉnh kích thước bàn phím",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // 1. Keyboard Height Slider
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Chiều cao bàn phím:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${settings.keyboardHeightPercent}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Slider(
-                        value = settings.keyboardHeightPercent.toFloat(),
-                        onValueChange = { newVal ->
-                            preferences.updateSettings { it.copy(keyboardHeightPercent = newVal.toInt()) }
-                        },
-                        valueRange = 80f..130f,
-                        steps = 9,
-                        modifier = Modifier.testTag("slider_keyboard_height")
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Nhỏ (80%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Chuẩn (100%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Cực cao (130%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-
-                // 2. Key Size Scale Slider
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Kích cỡ các phím (Key Size):",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${settings.keyScalePercent}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Slider(
-                        value = settings.keyScalePercent.toFloat(),
-                        onValueChange = { newVal ->
-                            preferences.updateSettings { it.copy(keyScalePercent = newVal.toInt()) }
-                        },
-                        valueRange = 80f..130f,
-                        steps = 9,
-                        modifier = Modifier.testTag("slider_key_scale")
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Nhỏ (80%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Chuẩn (100%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Lớn (130%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-
-                // 3. Row Spacing Slider
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Khoảng cách hàng phím (Row Spacing):",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${settings.rowSpacingDp} dp",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Slider(
-                        value = settings.rowSpacingDp.toFloat(),
-                        onValueChange = { newVal ->
-                            preferences.updateSettings { it.copy(rowSpacingDp = newVal.toInt()) }
-                        },
-                        valueRange = 2f..12f,
-                        steps = 9,
-                        modifier = Modifier.testTag("slider_row_spacing")
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Khít (2dp)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Tiêu chuẩn (5dp)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Thoáng (12dp)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-
-                // 4. Key Font Scale Slider
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Cỡ chữ trên phím (Font scale):",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${settings.fontScalePercent}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Slider(
-                        value = settings.fontScalePercent.toFloat(),
-                        onValueChange = { newVal ->
-                            preferences.updateSettings { it.copy(fontScalePercent = newVal.toInt()) }
-                        },
-                        valueRange = 85f..130f,
-                        steps = 8,
-                        modifier = Modifier.testTag("slider_font_scale")
-                    )
-
-                    // Font preview
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Xem trước cỡ chữ: A a Ă ă Â â Đ đ E e Ê ê Ô ô Ơ ơ Ư ư",
-                            fontSize = (14 * (settings.fontScalePercent / 100f)).sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                // 3. Virtual Navigation Bar (Bottom Chin) Height
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Khoảng trống thanh điều hướng đáy:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${settings.bottomChinHeightDp} dp",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Slider(
-                        value = settings.bottomChinHeightDp.toFloat(),
-                        onValueChange = { newVal ->
-                            preferences.updateSettings { it.copy(bottomChinHeightDp = newVal.toInt()) }
-                        },
-                        valueRange = 36f..64f,
-                        steps = 6,
-                        modifier = Modifier.testTag("slider_chin_height")
-                    )
-
-                    Text(
-                        text = "Khoảng trống nâng bàn phím cao hơn mép dưới, giúp thao tác ngón cái chính xác và không bị cấn thanh cử chỉ Android.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // Section 3: Alignment & Position on Screen
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            modifier = Modifier.fillMaxWidth().testTag("alignment_card")
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ViewSidebar,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "Vị trí hiển thị trên màn hình",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    text = "Điều chỉnh vị trí bàn phím để gõ thuận tiện bằng một tay hoặc toàn màn hình:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Left
-                    PositionChoiceCard(
-                        title = "Một tay trái",
-                        icon = Icons.Default.AlignHorizontalLeft,
-                        isSelected = settings.alignment == KeyboardAlignment.LEFT,
-                        modifier = Modifier.weight(1f).testTag("pos_btn_left"),
-                        onClick = {
-                            preferences.updateSettings { it.copy(alignment = KeyboardAlignment.LEFT) }
-                        }
-                    )
-
-                    // Center
-                    PositionChoiceCard(
-                        title = "Căn giữa",
-                        icon = Icons.Default.AlignHorizontalCenter,
-                        isSelected = settings.alignment == KeyboardAlignment.CENTER,
-                        modifier = Modifier.weight(1f).testTag("pos_btn_center"),
-                        onClick = {
-                            preferences.updateSettings { it.copy(alignment = KeyboardAlignment.CENTER) }
-                        }
-                    )
-
-                    // Right
-                    PositionChoiceCard(
-                        title = "Một tay phải",
-                        icon = Icons.Default.AlignHorizontalRight,
-                        isSelected = settings.alignment == KeyboardAlignment.RIGHT,
-                        modifier = Modifier.weight(1f).testTag("pos_btn_right"),
-                        onClick = {
-                            preferences.updateSettings { it.copy(alignment = KeyboardAlignment.RIGHT) }
-                        }
-                    )
-                }
-            }
-        }
-
-        // Section 4: Floating & Split Keyboard (Bàn phím nổi & Bàn phím tách rời)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            modifier = Modifier.fillMaxWidth().testTag("display_style_card")
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SmartButton,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "Bàn phím nổi & Bàn phím tách rời",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Text(
-                    text = "Tùy biến chế độ hiển thị trên màn hình dọc (Portrait) và màn hình ngang (Landscape):",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // 3 Display Style Choices
-                com.example.ime.model.KeyboardDisplayStyle.values().forEach { style ->
-                    val isSelected = settings.displayStyle == style
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
-                            )
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                preferences.updateSettings { it.copy(displayStyle = style) }
-                            }
-                            .padding(12.dp)
-                            .testTag("style_${style.name}")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = when (style) {
-                                        com.example.ime.model.KeyboardDisplayStyle.DOCKED -> "📌 Gắn đáy chuẩn (Toàn màn hình)"
-                                        com.example.ime.model.KeyboardDisplayStyle.FLOATING -> "🪟 Bàn phím nổi (Floating)"
-                                        com.example.ime.model.KeyboardDisplayStyle.SPLIT -> "✂️ Bàn phím tách rời (Split keyboard)"
-                                    },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = style.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            androidx.compose.material3.RadioButton(
-                                selected = isSelected,
-                                onClick = {
-                                    preferences.updateSettings { it.copy(displayStyle = style) }
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Auto-split toggle for Landscape mode
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            text = "Tự động tách đôi khi xoay ngang (Landscape)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "Khi xoay điện thoại nằm ngang, bàn phím tự động tách 2 bên để 2 ngón tay cái gõ nhanh và thuận tiện nhất.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = settings.autoSplitInLandscape,
-                        onCheckedChange = { c ->
-                            preferences.updateSettings { it.copy(autoSplitInLandscape = c) }
-                        },
-                        modifier = Modifier.testTag("switch_auto_split_landscape")
-                    )
-                }
-
-                // Floating keyboard size slider if Floating is enabled
-                if (settings.displayStyle == com.example.ime.model.KeyboardDisplayStyle.FLOATING) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                            // 2. Danh sách chủ đề thủ công
                             Text(
-                                text = "Kích cỡ cửa sổ bàn phím nổi:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
+                                text = "Hoặc chọn bộ màu cố định:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            Text(
-                                text = "${settings.floatingScalePercent}%",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
 
-                        Slider(
-                            value = settings.floatingScalePercent.toFloat(),
-                            onValueChange = { newVal ->
-                                preferences.updateSettings { it.copy(floatingScalePercent = newVal.toInt()) }
-                            },
-                            valueRange = 70f..95f,
-                            steps = 5,
-                            modifier = Modifier.testTag("slider_floating_scale")
-                        )
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                KeyboardThemes.allThemes.forEach { theme ->
+                                    val isSelected = settings.themeMode == ThemeMode.MANUAL && settings.themeId == theme.id
+                                    OutlinedCard(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
+                                        ),
+                                        border = CardDefaults.outlinedCardBorder().copy(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            brush = androidx.compose.ui.graphics.SolidColor(
+                                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                            )
+                                        ),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                preferences.updateSettings {
+                                                    it.copy(
+                                                        themeMode = ThemeMode.MANUAL,
+                                                        themeId = theme.id
+                                                    )
+                                                }
+                                            }
+                                            .padding(2.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(theme.accentActionColor)
+                                            )
+                                            Text(
+                                                text = theme.name,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Nhóm 2: Kích thước & Khoảng cách phím
+        item {
+            val isExpanded = expandedGroupId == "group_sizing"
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("accordion_group_sizing")
+            ) {
+                Column {
+                    AccordionHeader(
+                        title = "Kích thước & Khoảng cách phím",
+                        subtitle = "Chiều cao bàn phím, tỉ lệ phím, khoảng cách hàng, cỡ chữ",
+                        icon = Icons.Default.Height,
+                        isExpanded = isExpanded,
+                        onClick = { toggleGroup("group_sizing", 1) }
+                    )
+
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            // 1. Chiều cao bàn phím tổng thể
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Chiều cao bàn phím", fontWeight = FontWeight.Medium)
+                                    Text("${settings.keyboardHeightPercent}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = settings.keyboardHeightPercent.toFloat(),
+                                    onValueChange = { preferences.updateSettings { s -> s.copy(keyboardHeightPercent = it.toInt()) } },
+                                    valueRange = 80f..130f,
+                                    steps = 9
+                                )
+                            }
+
+                            // 2. Tỉ lệ kích thước phím
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Kích thước các phím", fontWeight = FontWeight.Medium)
+                                    Text("${settings.keyScalePercent}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = settings.keyScalePercent.toFloat(),
+                                    onValueChange = { preferences.updateSettings { s -> s.copy(keyScalePercent = it.toInt()) } },
+                                    valueRange = 80f..130f,
+                                    steps = 9
+                                )
+                            }
+
+                            // 3. Khoảng cách giữa các hàng phím
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Khoảng cách hàng phím", fontWeight = FontWeight.Medium)
+                                    Text("${settings.rowSpacingDp} dp", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = settings.rowSpacingDp.toFloat(),
+                                    onValueChange = { preferences.updateSettings { s -> s.copy(rowSpacingDp = it.toInt()) } },
+                                    valueRange = 2f..12f,
+                                    steps = 9
+                                )
+                            }
+
+                            // 4. Cỡ chữ trên phím
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Cỡ chữ trên mặt phím", fontWeight = FontWeight.Medium)
+                                    Text("${settings.fontScalePercent}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = settings.fontScalePercent.toFloat(),
+                                    onValueChange = { preferences.updateSettings { s -> s.copy(fontScalePercent = it.toInt()) } },
+                                    valueRange = 85f..130f,
+                                    steps = 8
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Nhóm 3: Hiệu ứng & Xem trước (YÊU CẦU 1)
+        item {
+            val isExpanded = expandedGroupId == "group_preview_effects"
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("accordion_group_preview_effects")
+            ) {
+                Column {
+                    AccordionHeader(
+                        title = "Hiệu ứng & Xem trước phím",
+                        subtitle = "Bật/tắt popup phóng to, hàng số chuyên dụng, nhãn phím cách",
+                        icon = Icons.Default.SmartButton,
+                        isExpanded = isExpanded,
+                        onClick = { toggleGroup("group_preview_effects", 2) }
+                    )
+
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            // YÊU CẦU 1: Tùy chọn Hiệu ứng Popup khi bấm phím
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("switch_show_key_preview"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Hiệu ứng Popup khi bấm phím",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = "Hiển thị bong bóng nổi phóng to ký tự trực tiếp trên phím đang nhấn.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showKeyPreview,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showKeyPreview = checked) }
+                                    }
+                                )
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                            // Hàng phím số chuyên dụng
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = "Hàng phím số (1-0) ở trên cùng", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = "Luôn hiển thị dãy số 1234567890 trên bàn phím chữ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showNumberRow,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showNumberRow = checked) }
+                                    }
+                                )
+                            }
+
+                            // Hàng số khi xoay ngang
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = "Hiện hàng số khi xoay ngang", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = "Cho phép hàng số xuất hiện trên màn hình ngang",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showNumberRowInLandscape,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showNumberRowInLandscape = checked) }
+                                    }
+                                )
+                            }
+
+                            // Nhãn cờ / kiểu gõ trên phím cách
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = "Hiển thị nhãn trên phím cách (Space)", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = "Hiện cờ quốc gia và tên phương thức gõ (Telex/VNI)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.spaceBarVietnameseIndicator,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(spaceBarVietnameseIndicator = checked) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Nhóm 4: Bàn phím nổi & Tách rời
+        item {
+            val isExpanded = expandedGroupId == "group_floating_split"
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("accordion_group_floating_split")
+            ) {
+                Column {
+                    AccordionHeader(
+                        title = "Bàn phím nổi & Tách rời",
+                        subtitle = "Chế độ gắn đáy, nổi di chuyển tự do, hoặc tách 2 bên",
+                        icon = Icons.Default.CallSplit,
+                        isExpanded = isExpanded,
+                        onClick = { toggleGroup("group_floating_split", 3) }
+                    )
+
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            // Chế độ hiển thị
+                            Text("Chế độ hiển thị bàn phím:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    KeyboardDisplayStyle.DOCKED to "Gắn đáy",
+                                    KeyboardDisplayStyle.FLOATING to "Nổi",
+                                    KeyboardDisplayStyle.SPLIT to "Tách rời"
+                                ).forEach { (style, label) ->
+                                    val isSelected = settings.displayStyle == style
+                                    OutlinedCard(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable { preferences.updateSettings { it.copy(displayStyle = style) } },
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface
+                                        ),
+                                        border = CardDefaults.outlinedCardBorder().copy(
+                                            brush = androidx.compose.ui.graphics.SolidColor(
+                                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                            )
+                                        )
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Tự động tách khi xoay ngang
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Tự động tách 2 bên khi xoay ngang", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = "Giúp ngón tay cái gõ dễ dàng hơn trên tablet hoặc màn hình ngang",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.autoSplitInLandscape,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(autoSplitInLandscape = checked) }
+                                    }
+                                )
+                            }
+
+                            // Độ thu nhỏ bàn phím nổi
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Độ thu nhỏ của bàn phím nổi", fontWeight = FontWeight.Medium)
+                                    Text("${settings.floatingScalePercent}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                Slider(
+                                    value = settings.floatingScalePercent.toFloat(),
+                                    onValueChange = { preferences.updateSettings { s -> s.copy(floatingScalePercent = it.toInt()) } },
+                                    valueRange = 65f..100f,
+                                    steps = 6
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Nhóm 5: Thanh điều hướng ảo (Bottom Chin)
+        item {
+            val isExpanded = expandedGroupId == "group_virtual_nav"
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("accordion_group_virtual_nav")
+            ) {
+                Column {
+                    AccordionHeader(
+                        title = "Thanh điều hướng ảo",
+                        subtitle = "Thanh tiện ích phía dưới bàn phím với phím di chuyển, dán, ẩn",
+                        icon = Icons.Default.ViewSidebar,
+                        isExpanded = isExpanded,
+                        onClick = { toggleGroup("group_virtual_nav", 4) }
+                    )
+
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Bật thanh điều hướng ảo", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = "Hiển thị dải công cụ tiện ích sát đáy bàn phím",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showVirtualNavBar,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showVirtualNavBar = checked) }
+                                    }
+                                )
+                            }
+
+                            if (settings.showVirtualNavBar) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Chiều cao thanh điều hướng", fontWeight = FontWeight.Medium)
+                                        Text("${settings.bottomChinHeightDp} dp", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                    }
+                                    Slider(
+                                        value = settings.bottomChinHeightDp.toFloat(),
+                                        onValueChange = { preferences.updateSettings { s -> s.copy(bottomChinHeightDp = it.toInt()) } },
+                                        valueRange = 36f..64f,
+                                        steps = 6
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -696,127 +689,63 @@ fun AppearanceScreen(
 }
 
 @Composable
-private fun ThemePreviewItem(
-    theme: KeyboardColorScheme,
-    isSelected: Boolean,
+fun AccordionHeader(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    isExpanded: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent)
-            .border(
-                width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(12.dp)
-            )
             .clickable { onClick() }
-            .padding(12.dp)
-            .testTag("theme_item_${theme.id.name}")
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // Color palette circles preview
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(theme.backgroundColor)
-                        .border(1.dp, theme.borderColor, RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(theme.keyBackgroundColor)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(theme.accentActionColor)
-                        )
-                    }
-                }
-
-                Column {
-                    Text(
-                        text = theme.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                    Text(
-                        text = if (theme.isDark) "Giao diện tối (Dark)" else "Giao diện sáng (Light)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Đã chọn",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-    }
-}
 
-@Composable
-private fun PositionChoiceCard(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-            )
-            .border(
-                width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                text = title,
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
-        }
+        Icon(
+            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = if (isExpanded) "Thu gọn" else "Mở rộng",
+            tint = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }

@@ -1,6 +1,6 @@
 {
-  "name": "AnyKeyboard26",
-  "description": "AnyKeyboard26 - Bàn phím tiếng Việt & đa ngôn ngữ thông minh với bàn phím nổi, bàn phím tách rời ngang/dọc, kho emoji đầy đủ và thanh điều hướng ảo.",
+  "name": "Anykey26",
+  "description": "Anykey26 - Bàn phím tiếng Việt & đa ngôn ngữ thông minh với bàn phím nổi, bàn phím tách rời ngang/dọc, kho emoji đầy đủ và thanh điều hướng ảo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

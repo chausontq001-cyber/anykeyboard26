@@ -16,11 +16,15 @@ object NavigationBarPolicy {
     ): Boolean {
         if (insets.isVisible(WindowInsetsCompat.Type.navigationBars())) return false
 
-        val navigationMode = Settings.Secure.getInt(
-            context.contentResolver,
-            NAVIGATION_MODE_SETTING,
+        val navigationMode = try {
+            Settings.Secure.getInt(
+                context.contentResolver,
+                NAVIGATION_MODE_SETTING,
+                UNKNOWN_NAVIGATION_MODE
+            )
+        } catch (_: Exception) {
             UNKNOWN_NAVIGATION_MODE
-        )
+        }
         val isGestureNavigation = if (navigationMode != UNKNOWN_NAVIGATION_MODE) {
             navigationMode == GESTURAL_NAVIGATION_MODE
         } else {
