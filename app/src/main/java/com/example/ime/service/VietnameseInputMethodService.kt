@@ -14,6 +14,7 @@ import android.view.inputmethod.InputMethodManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
@@ -159,6 +160,11 @@ class VietnameseInputMethodService : InputMethodService(),
             setContent {
                 MaterialTheme {
                     val settings by preferences.settings.collectAsState()
+                    LaunchedEffect(settings.showSuggestions, settings.smartFeaturesEnabled) {
+                        if (!settings.showSuggestions || !settings.smartFeaturesEnabled) {
+                            suggestionsState = emptyList()
+                        }
+                    }
 
                     // Keep engine synced with user preferences
                     engine.typingMethod = settings.typingMethod
@@ -174,6 +180,7 @@ class VietnameseInputMethodService : InputMethodService(),
                         suggestions = suggestionsState,
                         onKeyTyped = { c -> handleKeyTyped(c) },
                         onBackspace = { handleBackspace() },
+                        onBackspaceDown = { handleBackspaceDown() },
                         onStartDeleteSelection = { beginDeleteSelection() },
                         onMoveDeleteSelection = { moveDeleteSelection(it) },
                         onFinishDeleteSelection = { finishDeleteSelection() },
@@ -244,6 +251,9 @@ class VietnameseInputMethodService : InputMethodService(),
             Log.e(TAG, "Error onStartInputView", e)
         }
         resetComposing()
+        if (!suggestionsEnabled()) {
+            suggestionsState = emptyList()
+        }
     }
 
     override fun onWindowShown() {
@@ -399,6 +409,29 @@ class VietnameseInputMethodService : InputMethodService(),
             ic.deleteSurroundingText(1, 0)
             updateSuggestions("")
         }
+    }
+
+    private fun handleBackspaceDown(): Boolean {
+        val ic = currentInputConnection ?: return false
+        val extracted = getExtractedText(ic) ?: return false
+        if (extracted.selectionStart < 0 ||
+            extracted.selectionEnd < 0 ||
+            extracted.selectionStart == extracted.selectionEnd
+        ) {
+            return false
+        }
+
+        val downSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        val upSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+        if (!downSent || !upSent) {
+            Log.w(TAG, "Input connection rejected selected-text delete key event")
+        }
+        resetComposing()
+        deleteSelectionAnchor = null
+        deleteSelectionBounds = null
+        fallbackShiftHeld = false
+        fallbackSelectionSteps = 0
+        return true
     }
 
     private fun beginDeleteSelection() {
@@ -591,10 +624,19 @@ class VietnameseInputMethodService : InputMethodService(),
     }
 
     private fun updateSuggestions(currentWord: String) {
+        if (!suggestionsEnabled()) {
+            suggestionsState = emptyList()
+            return
+        }
         suggestionsState = VietnameseDictionary.getSuggestions(
             currentWord = currentWord,
             previousWord = lastCommittedWord
         )
+    }
+
+    private fun suggestionsEnabled(): Boolean {
+        val settings = preferences.settings.value
+        return settings.showSuggestions && settings.smartFeaturesEnabled
     }
 
     private fun cycleNextLanguage() {

@@ -41,7 +41,7 @@ fun SuggestionBarView(
     onSelectSuggestion: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (!settings.showSuggestions && composingWord.isEmpty()) return
+    if (!settings.showSuggestions) return
 
     val fontScale = settings.fontScalePercent / 100f
     val scrollState = rememberScrollState()

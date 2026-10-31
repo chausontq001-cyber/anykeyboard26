@@ -39,7 +39,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.zIndex
 import android.view.inputmethod.EditorInfo
@@ -153,6 +152,7 @@ fun ComposeKeyboardView(
     suggestions: List<String>,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceDown: () -> Boolean,
     onStartDeleteSelection: () -> Unit,
     onMoveDeleteSelection: (Int) -> Unit,
     onFinishDeleteSelection: () -> Unit,
@@ -239,7 +239,7 @@ fun ComposeKeyboardView(
             else -> 4f
         }
         val reservedHeight =
-            (if (keyboardSettings.showSuggestions || composingWord.isNotEmpty()) 42.dp else 0.dp) +
+            (if (keyboardSettings.showSuggestions) 42.dp else 0.dp) +
                 (if (keyboardSettings.showVirtualNavBar && !hideVirtualNavigationBar) {
                     keyboardSettings.bottomChinHeightDp.dp
                 } else {
@@ -340,6 +340,7 @@ fun ComposeKeyboardView(
                             }
                         },
                         onBackspace = onBackspace,
+                        onBackspaceDown = onBackspaceDown,
                         onStartDeleteSelection = onStartDeleteSelection,
                         onMoveDeleteSelection = onMoveDeleteSelection,
                         onFinishDeleteSelection = onFinishDeleteSelection,
@@ -404,6 +405,7 @@ fun ComposeKeyboardView(
                     }
                 },
                 onBackspace = onBackspace,
+                onBackspaceDown = onBackspaceDown,
                 onStartDeleteSelection = onStartDeleteSelection,
                 onMoveDeleteSelection = onMoveDeleteSelection,
                 onFinishDeleteSelection = onFinishDeleteSelection,
@@ -458,6 +460,7 @@ private fun KeyboardContentWrapper(
     triggerHaptic: () -> Unit,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceDown: () -> Boolean,
     onStartDeleteSelection: () -> Unit,
     onMoveDeleteSelection: (Int) -> Unit,
     onFinishDeleteSelection: () -> Unit,
@@ -484,7 +487,7 @@ private fun KeyboardContentWrapper(
     isMultiline: Boolean = false
 ) {
     // 1. Suggestion Bar
-    if (settings.showSuggestions || composingWord.isNotEmpty()) {
+    if (settings.showSuggestions) {
         SuggestionBarView(
             composingWord = composingWord,
             suggestions = suggestions,
@@ -521,6 +524,11 @@ private fun KeyboardContentWrapper(
                     onBackspace = {
                         triggerHaptic()
                         onBackspace()
+                    },
+                    onBackspaceDown = {
+                        val handled = onBackspaceDown()
+                        if (handled) triggerHaptic()
+                        handled
                     },
                     onStartDeleteSelection = {
                         triggerHaptic()
@@ -586,6 +594,11 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onBackspace()
                     },
+                    onBackspaceDown = {
+                        val handled = onBackspaceDown()
+                        if (handled) triggerHaptic()
+                        handled
+                    },
                     onStartDeleteSelection = {
                         triggerHaptic()
                         onStartDeleteSelection()
@@ -632,6 +645,11 @@ private fun KeyboardContentWrapper(
                     onBackspace = {
                         triggerHaptic()
                         onBackspace()
+                    },
+                    onBackspaceDown = {
+                        val handled = onBackspaceDown()
+                        if (handled) triggerHaptic()
+                        handled
                     },
                     onStartDeleteSelection = {
                         triggerHaptic()
@@ -716,6 +734,7 @@ private fun KeyboardMainContent(
     fontScale: Float,
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
+    onBackspaceDown: () -> Boolean,
     onStartDeleteSelection: () -> Unit,
     onMoveDeleteSelection: (Int) -> Unit,
     onFinishDeleteSelection: () -> Unit,
@@ -835,6 +854,7 @@ private fun KeyboardMainContent(
                             weight = 1.3f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
                             onClick = onBackspace,
+                            onBackspaceDown = onBackspaceDown,
                             onStartSelection = onStartDeleteSelection,
                             onMoveSelection = onMoveDeleteSelection,
                             onFinishSelection = onFinishDeleteSelection
@@ -893,7 +913,7 @@ private fun KeyboardMainContent(
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
-                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -924,7 +944,7 @@ private fun KeyboardMainContent(
                     SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -954,7 +974,7 @@ private fun KeyboardMainContent(
                     MORE_SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1055,6 +1075,7 @@ private fun KeyboardMainContent(
                             weight = 2f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
                             onClick = onBackspace,
+                            onBackspaceDown = onBackspaceDown,
                             onStartSelection = onStartDeleteSelection,
                             onMoveSelection = onMoveDeleteSelection,
                             onFinishSelection = onFinishDeleteSelection
@@ -1100,39 +1121,7 @@ private fun RowScope.KeyCap(
         colorScheme.borderColor.copy(alpha = 0.35f)
     }
 
-    val density = LocalDensity.current
-    val popupBubbleShape = remember(density) {
-        GenericShape { size, _ ->
-            val w = size.width
-            val h = size.height
-            val r = with(density) { 16.dp.toPx() }
-            val pointerHalfWidth = with(density) { 8.dp.toPx() }
-            val pointerHeight = with(density) { 9.dp.toPx() }
-            val bodyHeight = h - pointerHeight
-            val cx = w / 2f
-
-            // Thân trên bo tròn 16dp
-            moveTo(r, 0f)
-            lineTo(w - r, 0f)
-            quadraticTo(w, 0f, w, r)
-            lineTo(w, bodyHeight - r)
-            quadraticTo(w, bodyHeight, w - r, bodyHeight)
-
-            // Đáy bên phải nối vào mũi nhọn
-            lineTo(cx + pointerHalfWidth, bodyHeight)
-            // Mũi nhọn hướng xuống tâm phím
-            lineTo(cx, h)
-            // Đáy bên trái mũi nhọn
-            lineTo(cx - pointerHalfWidth, bodyHeight)
-
-            // Bo tròn đáy trái
-            lineTo(r, bodyHeight)
-            quadraticTo(0f, bodyHeight, 0f, bodyHeight - r)
-            lineTo(0f, r)
-            quadraticTo(0f, 0f, r, 0f)
-            close()
-        }
-    }
+    val popupBubbleShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = Modifier
@@ -1214,12 +1203,12 @@ private fun RowScope.KeyCap(
             )
         }
 
-        // Popup xem trước phím dạng Glassmorphism hình giọt nước có mũi nhọn nhô xuống
+        // The preview is visual-only and does not add a pointer input target.
         if (showPreview && (isPressed || popupAlpha > 0.05f) && !isSpecial) {
             Box(
                 modifier = Modifier
                     .offset(y = (-64).dp)
-                    .size(width = 56.dp, height = 65.dp)
+                    .size(width = 56.dp, height = 56.dp)
                     .scale(popupScale)
                     .alpha(popupAlpha)
                     .zIndex(200f)
@@ -1254,13 +1243,14 @@ private fun RowScope.KeyCap(
                         color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
                         shape = popupBubbleShape
                     ),
-                contentAlignment = Alignment.TopCenter
+                contentAlignment = Alignment.Center
             ) {
                 // Vệt phản quang mặt kính mép trên của popup
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.75f)
                         .height(1.5.dp)
+                        .align(Alignment.TopCenter)
                         .padding(top = 2.dp)
                         .background(
                             Brush.horizontalGradient(
@@ -1277,14 +1267,16 @@ private fun RowScope.KeyCap(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = text,
                         color = if (colorScheme.isDark) Color(0xFFFFFFFF) else Color(0xFF12151B),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -1422,6 +1414,7 @@ private fun RowScope.BackspaceGestureKeyCap(
     weight: Float,
     enableSwipeDelete: Boolean,
     onClick: () -> Unit,
+    onBackspaceDown: () -> Boolean,
     onStartSelection: () -> Unit,
     onMoveSelection: (Int) -> Unit,
     onFinishSelection: () -> Unit
@@ -1440,7 +1433,8 @@ private fun RowScope.BackspaceGestureKeyCap(
             .pointerInput(enableSwipeDelete) {
                 coroutineScope {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = true)
+                        val deletedSelectionOnDown = onBackspaceDown()
                         var lastX = down.position.x
                         var totalDragX = 0f
                         var selectionDragPx = 0f
@@ -1448,33 +1442,43 @@ private fun RowScope.BackspaceGestureKeyCap(
                         var wasLongPress = false
                         isSwiping = false
 
-                        val repeatJob = launch {
-                            delay(viewConfiguration.longPressTimeoutMillis.toLong())
-                            if (!didSelect) {
-                                wasLongPress = true
-                                while (isActive) {
-                                    onClick()
-                                    delay(55)
+                        val repeatJob = if (deletedSelectionOnDown) {
+                            null
+                        } else {
+                            launch {
+                                delay(viewConfiguration.longPressTimeoutMillis.toLong())
+                                if (!didSelect) {
+                                    wasLongPress = true
+                                    while (isActive) {
+                                        onClick()
+                                        delay(55)
+                                    }
                                 }
                             }
                         }
+                        if (deletedSelectionOnDown) down.consume()
 
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (deletedSelectionOnDown) {
+                                    change.consume()
+                                    if (!change.pressed) break
+                                    continue
+                                }
                                 if (!change.pressed) break
 
                                 totalDragX += change.position.x - lastX
                                 val dragX = change.position.x - lastX
                                 lastX = change.position.x
 
-                                if (abs(totalDragX) > 8f) repeatJob.cancel()
+                                if (abs(totalDragX) > 8f) repeatJob?.cancel()
 
                                 if (enableSwipeDelete && !didSelect && abs(totalDragX) > 25f) {
                                     didSelect = true
                                     isSwiping = true
-                                    repeatJob.cancel()
+                                    repeatJob?.cancel()
                                     onStartSelection()
                                     selectionDragPx = totalDragX * 1.7f
                                 } else if (didSelect) {
@@ -1496,12 +1500,12 @@ private fun RowScope.BackspaceGestureKeyCap(
                                 }
                             }
                         } finally {
-                            repeatJob.cancel()
+                            repeatJob?.cancel()
                             if (didSelect) onFinishSelection()
                             isSwiping = false
                         }
 
-                        if (!didSelect && !wasLongPress && abs(totalDragX) < 15f) onClick()
+                        if (!deletedSelectionOnDown && !didSelect && !wasLongPress && abs(totalDragX) < 15f) onClick()
                     }
                 }
             }
