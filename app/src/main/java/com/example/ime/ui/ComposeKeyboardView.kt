@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.zIndex
@@ -74,10 +76,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,11 +103,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import kotlin.math.min
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -152,6 +160,8 @@ private val MORE_SYMBOL_BOTTOM_KEYS = listOf("%", "_", "<", ">", "[", "]", "§")
 @Composable
 fun ComposeKeyboardView(
     settings: KeyboardSettings,
+    autoCapitalizationAtSentenceStart: Boolean = false,
+    autoCapitalizationUpdateToken: Int = 0,
     composingWord: String,
     suggestions: List<String>,
     hasActiveSelection: () -> Boolean = { false },
@@ -180,6 +190,7 @@ fun ComposeKeyboardView(
     imeAction: Int = EditorInfo.IME_ACTION_NONE,
     isMultiline: Boolean = false,
     onUpdateDisplayStyle: ((KeyboardDisplayStyle) -> Unit)? = null,
+    onEmojiSelected: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -219,6 +230,19 @@ fun ComposeKeyboardView(
 
     var layoutMode by remember { mutableStateOf(KeyboardLayoutMode.ALPHA) }
     var shiftState by remember { mutableStateOf(ShiftState.LOWER) }
+    var isAutoShiftPending by remember { mutableStateOf(false) }
+
+    LaunchedEffect(autoCapitalizationUpdateToken, autoCapitalizationAtSentenceStart, settings.autoCapitalize) {
+        if (settings.autoCapitalize && autoCapitalizationAtSentenceStart) {
+            if (shiftState != ShiftState.CAPS_LOCK) {
+                shiftState = ShiftState.SHIFT_ONCE
+                isAutoShiftPending = true
+            }
+        } else if (isAutoShiftPending) {
+            shiftState = ShiftState.LOWER
+            isAutoShiftPending = false
+        }
+    }
 
     fun triggerHaptic() {
         if (keyboardSettings.hapticFeedback && vibrator != null) {
@@ -339,16 +363,25 @@ fun ComposeKeyboardView(
                         triggerHaptic = { triggerHaptic() },
                         onKeyTyped = { c ->
                             onKeyTyped(c)
-                            if (shiftState == ShiftState.SHIFT_ONCE) {
+                            if (shiftState == ShiftState.SHIFT_ONCE && c.isLetter()) {
                                 shiftState = ShiftState.LOWER
+                                isAutoShiftPending = false
                             }
                         },
+                        onEmojiSelected = onEmojiSelected,
                         onBackspace = onBackspace,
                         onBackspaceDown = onBackspaceDown,
                         onStartDeleteSelection = onStartDeleteSelection,
                         onMoveDeleteSelection = onMoveDeleteSelection,
                         onFinishDeleteSelection = onFinishDeleteSelection,
-                        onSpace = onSpace,
+                        onSpace = {
+                            if (layoutMode == KeyboardLayoutMode.NUMBERS_SYMBOLS ||
+                                layoutMode == KeyboardLayoutMode.MORE_SYMBOLS
+                            ) {
+                                layoutMode = KeyboardLayoutMode.ALPHA
+                            }
+                            onSpace()
+                        },
                         onEnter = onEnter,
                         onSelectSuggestion = onSelectSuggestion,
                         onMoveCursorLeft = onMoveCursorLeft,
@@ -362,6 +395,7 @@ fun ComposeKeyboardView(
                         onCycleLanguage = onCycleLanguage,
                         onToggleShift = {
                             triggerHaptic()
+                            isAutoShiftPending = false
                             shiftState = when (shiftState) {
                                 ShiftState.LOWER -> ShiftState.SHIFT_ONCE
                                 ShiftState.SHIFT_ONCE -> ShiftState.CAPS_LOCK
@@ -403,16 +437,25 @@ fun ComposeKeyboardView(
                 triggerHaptic = { triggerHaptic() },
                 onKeyTyped = { c ->
                     onKeyTyped(c)
-                    if (shiftState == ShiftState.SHIFT_ONCE) {
+                    if (shiftState == ShiftState.SHIFT_ONCE && c.isLetter()) {
                         shiftState = ShiftState.LOWER
+                        isAutoShiftPending = false
                     }
                 },
+                onEmojiSelected = onEmojiSelected,
                 onBackspace = onBackspace,
                 onBackspaceDown = onBackspaceDown,
                 onStartDeleteSelection = onStartDeleteSelection,
                 onMoveDeleteSelection = onMoveDeleteSelection,
                 onFinishDeleteSelection = onFinishDeleteSelection,
-                onSpace = onSpace,
+                onSpace = {
+                    if (layoutMode == KeyboardLayoutMode.NUMBERS_SYMBOLS ||
+                        layoutMode == KeyboardLayoutMode.MORE_SYMBOLS
+                    ) {
+                        layoutMode = KeyboardLayoutMode.ALPHA
+                    }
+                    onSpace()
+                },
                 onEnter = onEnter,
                 onSelectSuggestion = onSelectSuggestion,
                 onMoveCursorLeft = onMoveCursorLeft,
@@ -426,6 +469,7 @@ fun ComposeKeyboardView(
                 onCycleLanguage = onCycleLanguage,
                 onToggleShift = {
                     triggerHaptic()
+                    isAutoShiftPending = false
                     shiftState = when (shiftState) {
                         ShiftState.LOWER -> ShiftState.SHIFT_ONCE
                         ShiftState.SHIFT_ONCE -> ShiftState.CAPS_LOCK
@@ -461,6 +505,7 @@ private fun KeyboardContentWrapper(
     shiftState: ShiftState,
     triggerHaptic: () -> Unit,
     onKeyTyped: (Char) -> Unit,
+    onEmojiSelected: (String) -> Unit,
     onBackspace: () -> Unit,
     onBackspaceDown: () -> Boolean,
     onStartDeleteSelection: () -> Unit,
@@ -522,6 +567,7 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onKeyTyped(c)
                     },
+                    onEmojiSelected = onEmojiSelected,
                     onBackspace = {
                         triggerHaptic()
                         onBackspace()
@@ -591,6 +637,7 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onKeyTyped(c)
                     },
+                    onEmojiSelected = onEmojiSelected,
                     onBackspace = {
                         triggerHaptic()
                         onBackspace()
@@ -643,6 +690,7 @@ private fun KeyboardContentWrapper(
                         triggerHaptic()
                         onKeyTyped(c)
                     },
+                    onEmojiSelected = onEmojiSelected,
                     onBackspace = {
                         triggerHaptic()
                         onBackspace()
@@ -734,6 +782,7 @@ private fun KeyboardMainContent(
     baseKeyHeight: Dp,
     fontScale: Float,
     onKeyTyped: (Char) -> Unit,
+    onEmojiSelected: (String) -> Unit,
     onBackspace: () -> Unit,
     onBackspaceDown: () -> Boolean,
     onStartDeleteSelection: () -> Unit,
@@ -854,7 +903,7 @@ private fun KeyboardMainContent(
                             height = baseKeyHeight,
                             weight = 1.3f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
-                            onClick = onBackspace,
+                            onTap = onBackspace,
                             onBackspaceDown = onBackspaceDown,
                             onStartSelection = onStartDeleteSelection,
                             onMoveSelection = onMoveDeleteSelection,
@@ -868,9 +917,14 @@ private fun KeyboardMainContent(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val splitSpaceWeight = 2.5f +
+                            ((if (settings.showEmojiKey) 0f else 1f) +
+                                (if (settings.showPeriodKey) 0f else 0.9f)) / 2f
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.2f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
-                        SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        if (settings.showEmojiKey) {
+                            SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
+                        }
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
 
                         // Center Gap with Quick Cursor Arrows in Split mode
                         Row(modifier = Modifier.weight(1.6f), horizontalArrangement = Arrangement.Center) {
@@ -879,8 +933,10 @@ private fun KeyboardMainContent(
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Phải", tint = colorScheme.secondaryTextColor, modifier = Modifier.size(20.dp).clickable { onMoveCursorRight() })
                         }
 
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 2.5f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        if (settings.showPeriodKey) {
+                            KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        }
                         SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.2f, onClick = onEnter)
                     }
                 } else {
@@ -914,14 +970,21 @@ private fun KeyboardMainContent(
                             val display = if (isUpper) k.uppercase() else k
                             KeyCap(text = display, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (19 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(display.first()) })
                         }
-                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                        BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onTap = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val alphaSpaceWeight = 4.2f +
+                            (if (settings.showEmojiKey) 0f else 1f) +
+                            (if (settings.showPeriodKey) 0f else 1f)
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
-                        SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        if (settings.showEmojiKey) {
+                            SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
+                        }
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        if (settings.showPeriodKey) {
+                            KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                        }
                         SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                     }
                 }
@@ -945,14 +1008,21 @@ private fun KeyboardMainContent(
                     SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onTap = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val symbolSpaceWeight = 4.2f +
+                        (if (settings.showEmojiKey) 0f else 1f) +
+                        (if (settings.showCommaKey) 0f else 1f)
                     KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
-                    SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                    KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
+                    if (settings.showEmojiKey) {
+                        SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
+                    }
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = symbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                    if (settings.showCommaKey) {
+                        KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
+                    }
                     SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
             }
@@ -975,22 +1045,28 @@ private fun KeyboardMainContent(
                     MORE_SYMBOL_BOTTOM_KEYS.forEach { s ->
                         KeyCap(text = s, colorScheme = colorScheme, height = baseKeyHeight, fontSize = (17 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(s.first()) })
                     }
-                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onClick = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
+                    BackspaceGestureKeyCap(colorScheme = colorScheme, height = baseKeyHeight, weight = 1.4f, enableSwipeDelete = settings.swipeBackspaceToDeleteFast, onTap = onBackspace, onBackspaceDown = onBackspaceDown, onStartSelection = onStartDeleteSelection, onMoveSelection = onMoveDeleteSelection, onFinishSelection = onFinishDeleteSelection)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val moreSymbolSpaceWeight = 4.2f +
+                        (if (settings.showEmojiKey) 0f else 1f) +
+                        (if (settings.showPeriodKey) 0f else 1f)
                     KeyCap(text = "ABC", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.ALPHA) })
-                    SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = 4.2f, onClick = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
-                    KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                    if (settings.showEmojiKey) {
+                        SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
+                    }
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = moreSymbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                    if (settings.showPeriodKey) {
+                        KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
+                    }
                     SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
             }
 
             KeyboardLayoutMode.EMOJI -> {
-                // COMPREHENSIVE FULL UNICODE EMOJI REPOSITORY WITH CATEGORIES
-                var selectedCatIndex by remember { mutableIntStateOf(0) }
-                val currentCategory = EmojiRepository.categories[selectedCatIndex]
+                val pagerState = rememberPagerState(pageCount = { EmojiRepository.categories.size + 1 })
+                val pagerScope = rememberCoroutineScope()
                 val catScrollState = rememberScrollState()
 
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -1003,15 +1079,31 @@ private fun KeyboardMainContent(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val isRecentSelected = pagerState.currentPage == 0
+                        Box(
+                            modifier = Modifier
+                                .semantics { contentDescription = "Emoji gần đây" }
+                                .testTag("emoji_recent_tab")
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isRecentSelected) colorScheme.accentActionColor.copy(alpha = 0.25f) else Color.Transparent
+                                )
+                                .clickable { pagerScope.launch { pagerState.animateScrollToPage(0) } }
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "🕘", fontSize = 20.sp)
+                        }
                         EmojiRepository.categories.forEachIndexed { index, cat ->
-                            val isCatSelected = selectedCatIndex == index
+                            val page = index + 1
+                            val isCatSelected = pagerState.currentPage == page
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(
                                         if (isCatSelected) colorScheme.accentActionColor.copy(alpha = 0.25f) else Color.Transparent
                                     )
-                                    .clickable { selectedCatIndex = index }
+                                    .clickable { pagerScope.launch { pagerState.animateScrollToPage(page) } }
                                     .padding(horizontal = 10.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1020,27 +1112,41 @@ private fun KeyboardMainContent(
                         }
                     }
 
-                    // Emojis Grid for selected category
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 32.dp),
+                    HorizontalPager(
+                        state = pagerState,
+                        key = { page ->
+                            if (page == 0) "recent_emojis" else "emoji_category_${EmojiRepository.categories[page - 1].name}"
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(baseKeyHeight * 3.4f)
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(currentCategory.emojis) { emoji ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        emoji.forEach { c -> onKeyTyped(c) }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = (22 * fontScale).sp)
+                            .padding(vertical = 4.dp)
+                    ) { page ->
+                        val emojis = if (page == 0) {
+                            settings.recentEmojis
+                        } else {
+                            EmojiRepository.categories[page - 1].emojis
+                        }
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 32.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(
+                                count = emojis.size,
+                                key = { index -> "$page-${emojis[index]}-$index" }
+                            ) { index ->
+                                val emoji = emojis[index]
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onEmojiSelected(emoji) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = emoji, fontSize = (22 * fontScale).sp)
+                                }
                             }
                         }
                     }
@@ -1065,7 +1171,7 @@ private fun KeyboardMainContent(
                             colorScheme = colorScheme,
                             height = baseKeyHeight,
                             weight = 5f,
-                            onClick = onSpace,
+                            onTap = onSpace,
                             onMoveCursorByTouchpad = onMoveCursorByTouchpad,
                             onCycleLanguage = onCycleLanguage
                         )
@@ -1075,7 +1181,7 @@ private fun KeyboardMainContent(
                             height = baseKeyHeight,
                             weight = 2f,
                             enableSwipeDelete = settings.swipeBackspaceToDeleteFast,
-                            onClick = onBackspace,
+                            onTap = onBackspace,
                             onBackspaceDown = onBackspaceDown,
                             onStartSelection = onStartDeleteSelection,
                             onMoveSelection = onMoveDeleteSelection,
@@ -1101,15 +1207,16 @@ private fun RowScope.KeyCap(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    var isPointerDown by remember { mutableStateOf(false) }
 
     // Glassmorphism Popup Animation (YÊU CẦU 1): Scale từ 0.8 lên 1.0 kèm fade-in
     val popupScale by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0.8f,
+        targetValue = if (isPressed || isPointerDown) 1f else 0.8f,
         animationSpec = spring(dampingRatio = 0.68f, stiffness = 850f),
         label = "glassPopupScale"
     )
     val popupAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0f,
+        targetValue = if (isPressed || isPointerDown) 1f else 0f,
         animationSpec = tween(durationMillis = 100),
         label = "glassPopupAlpha"
     )
@@ -1147,6 +1254,21 @@ private fun RowScope.KeyCap(
                     color = keyBorderColor,
                     shape = RoundedCornerShape(8.dp)
                 )
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPointerDown = true
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                            }
+                        } finally {
+                            isPointerDown = false
+                        }
+                    }
+                }
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(color = colorScheme.accentActionColor.copy(alpha = 0.45f))
@@ -1205,80 +1327,84 @@ private fun RowScope.KeyCap(
         }
 
         // The preview is visual-only and does not add a pointer input target.
-        if (showPreview && (isPressed || popupAlpha > 0.05f) && !isSpecial) {
-            Box(
-                modifier = Modifier
-                    .offset(y = (-64).dp)
-                    .size(width = 56.dp, height = 56.dp)
-                    .scale(popupScale)
-                    .alpha(popupAlpha)
-                    .zIndex(200f)
-                    .shadow(
-                        elevation = 14.dp,
-                        shape = popupBubbleShape,
-                        ambientColor = Color.Black.copy(alpha = 0.50f),
-                        spotColor = Color.Black.copy(alpha = 0.65f)
-                    )
-                    .clip(popupBubbleShape)
-                    .background(
-                        brush = if (colorScheme.isDark) {
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.25f), // Mặt kính sáng trên cùng
-                                    Color(0xFF262C3A).copy(alpha = 0.65f), // Kính mờ thân popup
-                                    Color(0xFF141720).copy(alpha = 0.90f)  // Đáy kính đậm
-                                )
-                            )
-                        } else {
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.95f),
-                                    Color(0xFFF0F3F8).copy(alpha = 0.70f),
-                                    Color(0xFFD6DBE4).copy(alpha = 0.88f)
-                                )
-                            )
-                        }
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
-                        shape = popupBubbleShape
-                    ),
-                contentAlignment = Alignment.Center
+        if (showPreview && (isPressed || isPointerDown || popupAlpha > 0.05f) && !isSpecial) {
+            Popup(
+                alignment = Alignment.Center,
+                offset = IntOffset(0, with(LocalDensity.current) { (-64).dp.toPx().roundToInt() }),
+                properties = PopupProperties(clippingEnabled = false, focusable = false)
             ) {
-                // Vệt phản quang mặt kính mép trên của popup
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.75f)
-                        .height(1.5.dp)
-                        .align(Alignment.TopCenter)
-                        .padding(top = 2.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    Color.White.copy(alpha = if (colorScheme.isDark) 0.70f else 0.90f),
-                                    Color.Transparent
-                                )
-                            )
+                        .size(width = 56.dp, height = 56.dp)
+                        .scale(popupScale)
+                        .alpha(popupAlpha)
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = popupBubbleShape,
+                            ambientColor = Color.Black.copy(alpha = 0.50f),
+                            spotColor = Color.Black.copy(alpha = 0.65f)
                         )
-                )
-
-                // KÝ TỰ PHÍM: Lớp trên cùng, độ tương phản cao tuyệt đối, không bị blur
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .clip(popupBubbleShape)
+                        .background(
+                            brush = if (colorScheme.isDark) {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.25f), // Mặt kính sáng trên cùng
+                                        Color(0xFF262C3A).copy(alpha = 0.65f), // Kính mờ thân popup
+                                        Color(0xFF141720).copy(alpha = 0.90f)  // Đáy kính đậm
+                                    )
+                                )
+                            } else {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.95f),
+                                        Color(0xFFF0F3F8).copy(alpha = 0.70f),
+                                        Color(0xFFD6DBE4).copy(alpha = 0.88f)
+                                    )
+                                )
+                            }
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
+                            shape = popupBubbleShape
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = text,
-                        color = if (colorScheme.isDark) Color(0xFFFFFFFF) else Color(0xFF12151B),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                    // Vệt phản quang mặt kính mép trên của popup
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.75f)
+                            .height(1.5.dp)
+                            .align(Alignment.TopCenter)
+                            .padding(top = 2.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = if (colorScheme.isDark) 0.70f else 0.90f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
                     )
+
+                    // KÝ TỰ PHÍM: Lớp trên cùng, độ tương phản cao tuyệt đối, không bị blur
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = text,
+                            color = if (colorScheme.isDark) Color(0xFFFFFFFF) else Color(0xFF12151B),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -1414,7 +1540,7 @@ private fun RowScope.BackspaceGestureKeyCap(
     height: Dp,
     weight: Float,
     enableSwipeDelete: Boolean,
-    onClick: () -> Unit,
+    onTap: () -> Unit,
     onBackspaceDown: () -> Boolean,
     onStartSelection: () -> Unit,
     onMoveSelection: (Int) -> Unit,
@@ -1422,6 +1548,7 @@ private fun RowScope.BackspaceGestureKeyCap(
 ) {
     var isSwiping by remember { mutableStateOf(false) }
     val selectionStepPx = with(LocalDensity.current) { 18.dp.toPx() }
+    val touchSlop = LocalViewConfiguration.current.touchSlop
 
     Box(
         modifier = Modifier
@@ -1431,16 +1558,19 @@ private fun RowScope.BackspaceGestureKeyCap(
             .clip(RoundedCornerShape(7.dp))
             .background(if (isSwiping) colorScheme.accentActionColor.copy(alpha = 0.3f) else colorScheme.specialKeyColor)
             .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
-            .pointerInput(enableSwipeDelete) {
+            .pointerInput(enableSwipeDelete, touchSlop) {
                 coroutineScope {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = true)
                         val deletedSelectionOnDown = onBackspaceDown()
                         var lastX = down.position.x
+                        var lastY = down.position.y
                         var totalDragX = 0f
+                        var totalDragY = 0f
                         var selectionDragPx = 0f
                         var didSelect = false
                         var wasLongPress = false
+                        var hasExceededTouchSlop = false
                         isSwiping = false
 
                         val repeatJob = if (deletedSelectionOnDown) {
@@ -1472,11 +1602,19 @@ private fun RowScope.BackspaceGestureKeyCap(
 
                                 totalDragX += change.position.x - lastX
                                 val dragX = change.position.x - lastX
+                                val dragY = change.position.y - lastY
                                 lastX = change.position.x
+                                lastY = change.position.y
+                                totalDragY += dragY
 
-                                if (abs(totalDragX) > 8f) repeatJob?.cancel()
+                                if (!hasExceededTouchSlop &&
+                                    totalDragX * totalDragX + totalDragY * totalDragY > touchSlop * touchSlop
+                                ) {
+                                    hasExceededTouchSlop = true
+                                    repeatJob?.cancel()
+                                }
 
-                                if (enableSwipeDelete && !didSelect && abs(totalDragX) > 25f) {
+                                if (enableSwipeDelete && !didSelect && abs(totalDragX) > touchSlop) {
                                     didSelect = true
                                     isSwiping = true
                                     repeatJob?.cancel()
@@ -1496,7 +1634,7 @@ private fun RowScope.BackspaceGestureKeyCap(
                                         selectionDragPx += selectionStepPx
                                     }
                                 }
-                                if (didSelect || abs(totalDragX) > 8f) {
+                                if (hasExceededTouchSlop) {
                                     change.consume()
                                 }
                             }
@@ -1506,7 +1644,7 @@ private fun RowScope.BackspaceGestureKeyCap(
                             isSwiping = false
                         }
 
-                        if (!deletedSelectionOnDown && !didSelect && !wasLongPress && abs(totalDragX) < 15f) onClick()
+                        if (!deletedSelectionOnDown && !didSelect && !wasLongPress && !hasExceededTouchSlop) onTap()
                     }
                 }
             }
@@ -1528,7 +1666,7 @@ private fun RowScope.SpaceGestureKeyCap(
     colorScheme: KeyboardColorScheme,
     height: Dp,
     weight: Float,
-    onClick: () -> Unit,
+    onTap: () -> Unit,
     onMoveCursorByTouchpad: (Int, Int) -> Unit,
     onCycleLanguage: () -> Unit
 ) {
@@ -1567,7 +1705,7 @@ private fun RowScope.SpaceGestureKeyCap(
             .clip(RoundedCornerShape(7.dp))
             .background(if (isLongPressLanguageSwitch && !hasMovedCursorEarly) colorScheme.accentActionColor.copy(alpha = 0.25f) else colorScheme.keyBackgroundColor)
             .border(0.5.dp, colorScheme.borderColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
-            .pointerInput(settings.swipeSpaceToMoveCursor, settings.holdSpaceToSwitchLanguage) {
+            .pointerInput(settings.swipeSpaceToMoveCursor, settings.holdSpaceToSwitchLanguage, touchSlop) {
                 coroutineScope {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = true)
@@ -1577,7 +1715,6 @@ private fun RowScope.SpaceGestureKeyCap(
                         var totalDragY = 0f
                         var emittedCursorStepsX = 0
                         var emittedCursorStepsY = 0
-                        var didMoveCursor = false
                         var didSwitchLanguage = false
                         var didLongPress = false
                         var hasExceededTouchSlop = false
@@ -1605,7 +1742,7 @@ private fun RowScope.SpaceGestureKeyCap(
                                 totalDragX += dragX
                                 totalDragY += dragY
                                 if (!hasExceededTouchSlop &&
-                                    abs(totalDragX) + abs(totalDragY) > touchSlop
+                                    totalDragX * totalDragX + totalDragY * totalDragY > touchSlop * touchSlop
                                 ) {
                                     hasExceededTouchSlop = true
                                     hasMovedCursorEarly = true
@@ -1631,7 +1768,6 @@ private fun RowScope.SpaceGestureKeyCap(
                                         onMoveCursorByTouchpad(stepsX, stepsY)
                                         emittedCursorStepsX = targetStepsX
                                         emittedCursorStepsY = targetStepsY
-                                        didMoveCursor = true
                                     }
                                 }
 
@@ -1644,7 +1780,7 @@ private fun RowScope.SpaceGestureKeyCap(
                             touchpadActive = false
                         }
 
-                        if (!didMoveCursor && !didSwitchLanguage && !didLongPress) onClick()
+                        if (!hasExceededTouchSlop && !didSwitchLanguage && !didLongPress) onTap()
                     }
                 }
             }

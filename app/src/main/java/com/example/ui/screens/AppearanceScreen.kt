@@ -416,6 +416,53 @@ fun AppearanceScreen(
 
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
+                            Row(
+                                modifier = Modifier.fillMaxWidth().testTag("switch_show_comma_key"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Hiển thị phím phẩy (,)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showCommaKey,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showCommaKey = checked) }
+                                    }
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().testTag("switch_show_period_key"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Hiển thị phím chấm (.)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showPeriodKey,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showPeriodKey = checked) }
+                                    }
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().testTag("switch_show_emoji_key"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Hiển thị phím Emoji (😀)", modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Switch(
+                                    checked = settings.showEmojiKey,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(showEmojiKey = checked) }
+                                    }
+                                )
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
                             // Hàng phím số chuyên dụng
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

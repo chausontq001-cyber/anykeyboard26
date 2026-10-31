@@ -3,6 +3,7 @@ package com.example.ime.model
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.Immutable
+import org.json.JSONArray
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,7 +54,11 @@ data class KeyboardSettings(
     val autoSplitInLandscape: Boolean = true,
     val floatingScalePercent: Int = 80,
     // Popup key preview effect
-    val showKeyPreview: Boolean = true
+    val showKeyPreview: Boolean = true,
+    val showCommaKey: Boolean = true,
+    val showPeriodKey: Boolean = true,
+    val showEmojiKey: Boolean = true,
+    val recentEmojis: List<String> = emptyList()
 )
 
 class KeyboardPreferences(context: Context) {
@@ -165,7 +170,17 @@ class KeyboardPreferences(context: Context) {
             ),
             autoSplitInLandscape = prefs.getBoolean(KEY_AUTO_SPLIT_LANDSCAPE, true),
             floatingScalePercent = prefs.getInt(KEY_FLOATING_SCALE, 80),
-            showKeyPreview = prefs.getBoolean(KEY_SHOW_KEY_PREVIEW, true)
+            showKeyPreview = prefs.getBoolean(KEY_SHOW_KEY_PREVIEW, true),
+            showCommaKey = prefs.getBoolean(KEY_SHOW_COMMA_KEY, true),
+            showPeriodKey = prefs.getBoolean(KEY_SHOW_PERIOD_KEY, true),
+            showEmojiKey = prefs.getBoolean(KEY_SHOW_EMOJI_KEY, true),
+            recentEmojis = runCatching {
+                val json = JSONArray(prefs.getString(KEY_RECENT_EMOJIS, "[]") ?: "[]")
+                (0 until minOf(json.length(), MAX_RECENT_EMOJIS))
+                    .map { json.optString(it) }
+                    .filter(String::isNotEmpty)
+                    .distinct()
+            }.getOrDefault(emptyList())
         )
     }
 
@@ -219,6 +234,10 @@ class KeyboardPreferences(context: Context) {
             putBoolean(KEY_AUTO_SPLIT_LANDSCAPE, updated.autoSplitInLandscape)
             putInt(KEY_FLOATING_SCALE, updated.floatingScalePercent)
             putBoolean(KEY_SHOW_KEY_PREVIEW, updated.showKeyPreview)
+            putBoolean(KEY_SHOW_COMMA_KEY, updated.showCommaKey)
+            putBoolean(KEY_SHOW_PERIOD_KEY, updated.showPeriodKey)
+            putBoolean(KEY_SHOW_EMOJI_KEY, updated.showEmojiKey)
+            putString(KEY_RECENT_EMOJIS, JSONArray(updated.recentEmojis.distinct().take(MAX_RECENT_EMOJIS)).toString())
             apply()
         }
     }
@@ -285,6 +304,11 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_AUTO_SPLIT_LANDSCAPE = "auto_split_landscape"
         private const val KEY_FLOATING_SCALE = "floating_scale"
         private const val KEY_SHOW_KEY_PREVIEW = "show_key_preview"
+        private const val KEY_SHOW_COMMA_KEY = "show_comma_key"
+        private const val KEY_SHOW_PERIOD_KEY = "show_period_key"
+        private const val KEY_SHOW_EMOJI_KEY = "show_emoji_key"
+        private const val KEY_RECENT_EMOJIS = "recent_emojis"
+        private const val MAX_RECENT_EMOJIS = 24
 
         @Volatile
         private var instance: KeyboardPreferences? = null

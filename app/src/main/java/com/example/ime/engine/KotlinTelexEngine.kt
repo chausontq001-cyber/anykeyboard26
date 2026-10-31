@@ -43,7 +43,7 @@ class KotlinTelexEngine : TelexEngine {
         var currentTone = 0
         var lastToneChar: Char? = null
 
-        for (ch in rawChars) {
+        for ((rawIndex, ch) in rawChars.withIndex()) {
             val lower = ch.lowercaseChar()
 
             when (lower) {
@@ -124,7 +124,7 @@ class KotlinTelexEngine : TelexEngine {
                         val lastUpper = text.last().isUpperCase()
                         text.setCharAt(text.length - 1, if (lastUpper) 'A' else 'a')
                         text.append(ch)
-                    } else {
+                    } else if (!applyFinalVowelModifier(text, 'a')) {
                         text.append(ch)
                     }
                 }
@@ -136,7 +136,7 @@ class KotlinTelexEngine : TelexEngine {
                         val lastUpper = text.last().isUpperCase()
                         text.setCharAt(text.length - 1, if (lastUpper) 'E' else 'e')
                         text.append(ch)
-                    } else {
+                    } else if (!applyFinalVowelModifier(text, 'e')) {
                         text.append(ch)
                     }
                 }
@@ -148,6 +148,38 @@ class KotlinTelexEngine : TelexEngine {
                         val lastUpper = text.last().isUpperCase()
                         text.setCharAt(text.length - 1, if (lastUpper) 'O' else 'o')
                         text.append(ch)
+                    } else if (!applyFinalVowelModifier(text, 'o')) {
+                        text.append(ch)
+                    }
+                }
+                'w' -> {
+                    if (text.isNotEmpty()) {
+                        val last = text.last()
+                        val lowerLast = last.lowercaseChar()
+                        val lastUpper = last.isUpperCase()
+                        when (lowerLast) {
+                            'a' -> text.setCharAt(text.length - 1, if (lastUpper) 'Ă' else 'ă')
+                            'o' -> text.setCharAt(text.length - 1, if (lastUpper) 'Ơ' else 'ơ')
+                            'u' -> text.setCharAt(text.length - 1, if (lastUpper) 'Ư' else 'ư')
+                            'ă', 'ơ', 'ư' -> {
+                                if (rawIndex > 0 && rawChars[rawIndex - 1].lowercaseChar() == 'w') {
+                                    val base = when (lowerLast) {
+                                        'ă' -> if (lastUpper) 'A' else 'a'
+                                        'ơ' -> if (lastUpper) 'O' else 'o'
+                                        else -> if (lastUpper) 'U' else 'u'
+                                    }
+                                    text.setCharAt(text.length - 1, base)
+                                    text.append(rawChars[rawIndex - 1]).append(ch)
+                                } else {
+                                    text.append(ch)
+                                }
+                            }
+                            else -> {
+                                if (lowerLast == 'w' || !applyWModifier(text)) {
+                                    text.append(ch)
+                                }
+                            }
+                        }
                     } else {
                         text.append(ch)
                     }
@@ -180,6 +212,42 @@ class KotlinTelexEngine : TelexEngine {
     private fun hasVowel(sb: CharSequence): Boolean {
         for (i in 0 until sb.length) {
             if (VietnameseCharUtils.isVowel(sb[i])) return true
+        }
+        return false
+    }
+
+    private fun applyFinalVowelModifier(text: StringBuilder, vowel: Char): Boolean {
+        if (text.isEmpty() || VietnameseCharUtils.isVowel(text.last())) return false
+
+        for (index in text.lastIndex downTo 0) {
+            val candidate = text[index]
+            if (VietnameseCharUtils.isVowel(candidate)) {
+                if (candidate.lowercaseChar() != vowel) return false
+                val replacement = when (vowel) {
+                    'a' -> if (candidate.isUpperCase()) 'Â' else 'â'
+                    'e' -> if (candidate.isUpperCase()) 'Ê' else 'ê'
+                    else -> if (candidate.isUpperCase()) 'Ô' else 'ô'
+                }
+                text.setCharAt(index, replacement)
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun applyWModifier(text: StringBuilder): Boolean {
+        for (index in text.lastIndex downTo 0) {
+            val candidate = text[index]
+            if (!VietnameseCharUtils.isVowel(candidate)) continue
+
+            val replacement = when (candidate.lowercaseChar()) {
+                'a' -> if (candidate.isUpperCase()) 'Ă' else 'ă'
+                'o' -> if (candidate.isUpperCase()) 'Ơ' else 'ơ'
+                'u' -> if (candidate.isUpperCase()) 'Ư' else 'ư'
+                else -> return false
+            }
+            text.setCharAt(index, replacement)
+            return true
         }
         return false
     }

@@ -3,6 +3,7 @@ package com.example.ime.service
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Bundle
+import android.text.TextUtils
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -13,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
@@ -69,6 +71,8 @@ class VietnameseInputMethodService : InputMethodService(),
     private var hideVirtualNavigationBarState by mutableStateOf(false)
     private var currentImeActionState by mutableStateOf(EditorInfo.IME_ACTION_NONE)
     private var isMultilineState by mutableStateOf(false)
+    private var cursorAtSentenceStartState by mutableStateOf(false)
+    private var cursorCapsUpdateTokenState by mutableIntStateOf(0)
     private var deleteSelectionAnchor: Int? = null
     private var deleteSelectionEnd = 0
     private var deleteSelectionBounds: IntRange? = null
@@ -175,10 +179,21 @@ class VietnameseInputMethodService : InputMethodService(),
 
                     ComposeKeyboardView(
                         settings = settings,
+                        autoCapitalizationAtSentenceStart = cursorAtSentenceStartState,
+                        autoCapitalizationUpdateToken = cursorCapsUpdateTokenState,
                         composingWord = composingWordState,
                         suggestions = suggestionsState,
                         hasActiveSelection = { hasActiveSelection() },
                         onKeyTyped = { c -> handleKeyTyped(c) },
+                        onEmojiSelected = { emoji ->
+                            preferences.updateSettings { settings ->
+                                settings.copy(
+                                    recentEmojis = (listOf(emoji) + settings.recentEmojis.filterNot { it == emoji })
+                                        .take(24)
+                                )
+                            }
+                            handleEmojiSelected(emoji)
+                        },
                         onBackspace = { handleBackspace() },
                         onBackspaceDown = { handleBackspaceDown() },
                         onStartDeleteSelection = { beginDeleteSelection() },
@@ -243,6 +258,7 @@ class VietnameseInputMethodService : InputMethodService(),
             currentImeActionState = EditorInfo.IME_ACTION_NONE
             isMultilineState = false
         }
+        updateAutoCapitalizationFromCursor(info)
         try {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -304,6 +320,7 @@ class VietnameseInputMethodService : InputMethodService(),
             candidatesStart,
             candidatesEnd
         )
+        updateAutoCapitalizationFromCursor(currentInputEditorInfo)
         if (!::engine.isInitialized || !engine.isWordActive()) return
 
         if (candidatesStart < 0 ||
@@ -314,6 +331,16 @@ class VietnameseInputMethodService : InputMethodService(),
             resetComposing()
             currentInputConnection?.finishComposingText()
         }
+    }
+
+    private fun updateAutoCapitalizationFromCursor(info: EditorInfo?) {
+        val capsMode = if (info != null) {
+            currentInputConnection?.getCursorCapsMode(info.inputType) ?: 0
+        } else {
+            0
+        }
+        cursorAtSentenceStartState = (capsMode and TextUtils.CAP_MODE_SENTENCES) != 0
+        cursorCapsUpdateTokenState++
     }
 
     override fun onDestroy() {
@@ -384,6 +411,13 @@ class VietnameseInputMethodService : InputMethodService(),
                 resetComposing()
             }
         }
+    }
+
+    private fun handleEmojiSelected(emoji: String) {
+        val ic = currentInputConnection ?: return
+        commitComposingWord()
+        commitTextAtCurrentSelection(ic, emoji)
+        updateSuggestions("")
     }
 
     private fun hasActiveSelection(): Boolean {
