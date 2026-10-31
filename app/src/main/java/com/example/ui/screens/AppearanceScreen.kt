@@ -679,12 +679,93 @@ fun AppearanceScreen(
                                         steps = 6
                                     )
                                 }
+
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                Text("Các nút trên thanh điều hướng", fontWeight = FontWeight.Bold)
+                                NavigationBarOptionRow(
+                                    title = "Đổi ngôn ngữ",
+                                    description = "Chuyển sang ngôn ngữ đã bật tiếp theo",
+                                    checked = settings.navBarShowLanguageSwitch,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowLanguageSwitch = checked) }
+                                    }
+                                )
+                                NavigationBarOptionRow(
+                                    title = "Di chuyển con trỏ",
+                                    description = "Hiện nút sang trái và sang phải",
+                                    checked = settings.navBarShowCursorArrows,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowCursorArrows = checked) }
+                                    }
+                                )
+                                NavigationBarOptionRow(
+                                    title = "Đầu/cuối dòng",
+                                    description = "Hiện nút nhảy đến đầu và cuối dòng",
+                                    checked = settings.navBarShowLineJump,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowLineJump = checked) }
+                                    }
+                                )
+                                NavigationBarOptionRow(
+                                    title = "Chọn tất cả",
+                                    description = "Hiện nút chọn toàn bộ văn bản",
+                                    checked = settings.navBarShowSelectAll,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowSelectAll = checked) }
+                                    }
+                                )
+                                NavigationBarOptionRow(
+                                    title = "Dán",
+                                    description = "Hiện nút dán nội dung từ clipboard",
+                                    checked = settings.navBarShowPaste,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowPaste = checked) }
+                                    }
+                                )
+                                NavigationBarOptionRow(
+                                    title = "Ẩn bàn phím",
+                                    description = "Hiện nút thu bàn phím ở góc phải",
+                                    checked = settings.navBarShowHideKeyboard,
+                                    onCheckedChange = { checked ->
+                                        preferences.updateSettings { it.copy(navBarShowHideKeyboard = checked) }
+                                    }
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NavigationBarOptionRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 

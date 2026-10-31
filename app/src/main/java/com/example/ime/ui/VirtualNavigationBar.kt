@@ -46,7 +46,7 @@ fun VirtualNavigationBar(
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
     onPaste: () -> Unit,
-    onSwitchIme: () -> Unit,
+    onCycleLanguage: () -> Unit,
     onHideKeyboard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -65,89 +65,95 @@ fun VirtualNavigationBar(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (settings.navBarShowLineJump) {
-                NavBarIconButton(
-                    icon = Icons.Default.FirstPage,
-                    contentDescription = "Đầu dòng",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_first_page",
-                    buttonSize = buttonSize,
-                    onClick = onMoveCursorStart
-                )
-            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (settings.navBarShowLanguageSwitch) {
+                    NavBarIconButton(
+                        icon = Icons.Default.Language,
+                        contentDescription = "Đổi ngôn ngữ",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_switch_language",
+                        buttonSize = buttonSize,
+                        onClick = onCycleLanguage
+                    )
+                }
 
-            if (settings.navBarShowCursorArrows) {
-                NavBarIconButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Sang trái",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_cursor_left",
-                    buttonSize = buttonSize,
-                    onClick = onMoveCursorLeft
-                )
-            }
+                if (settings.navBarShowLineJump) {
+                    NavBarIconButton(
+                        icon = Icons.Default.FirstPage,
+                        contentDescription = "Đầu dòng",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_first_page",
+                        buttonSize = buttonSize,
+                        onClick = onMoveCursorStart
+                    )
+                }
 
-            // Quick select all or paste button
-            if (settings.navBarShowSelectAll) {
-                NavBarIconButton(
-                    icon = Icons.Default.SelectAll,
-                    contentDescription = "Chọn tất cả",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_select_all",
-                    buttonSize = buttonSize,
-                    onClick = onSelectAll
-                )
-            }
+                if (settings.navBarShowCursorArrows) {
+                    NavBarIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Sang trái",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_cursor_left",
+                        buttonSize = buttonSize,
+                        onClick = onMoveCursorLeft
+                    )
+                }
 
-            if (settings.navBarShowPaste) {
-                NavBarIconButton(
-                    icon = Icons.Default.ContentPaste,
-                    contentDescription = "Dán",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_paste",
-                    buttonSize = buttonSize,
-                    onClick = onPaste
-                )
-            }
+                if (settings.navBarShowSelectAll) {
+                    NavBarIconButton(
+                        icon = Icons.Default.SelectAll,
+                        contentDescription = "Chọn tất cả",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_select_all",
+                        buttonSize = buttonSize,
+                        onClick = onSelectAll
+                    )
+                }
 
-            if (settings.navBarShowCursorArrows) {
-                NavBarIconButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Sang phải",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_cursor_right",
-                    buttonSize = buttonSize,
-                    onClick = onMoveCursorRight
-                )
-            }
+                if (settings.navBarShowPaste) {
+                    NavBarIconButton(
+                        icon = Icons.Default.ContentPaste,
+                        contentDescription = "Dán",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_paste",
+                        buttonSize = buttonSize,
+                        onClick = onPaste
+                    )
+                }
 
-            if (settings.navBarShowLineJump) {
-                NavBarIconButton(
-                    icon = Icons.AutoMirrored.Filled.LastPage,
-                    contentDescription = "Cuối dòng",
-                    colorScheme = colorScheme,
-                    testTag = "nav_btn_last_page",
-                    buttonSize = buttonSize,
-                    onClick = onMoveCursorEnd
-                )
-            }
+                if (settings.navBarShowCursorArrows) {
+                    NavBarIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Sang phải",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_cursor_right",
+                        buttonSize = buttonSize,
+                        onClick = onMoveCursorRight
+                    )
+                }
 
-            NavBarIconButton(
-                icon = Icons.Default.Language,
-                contentDescription = "Chuyển bàn phím",
-                colorScheme = colorScheme,
-                testTag = "nav_btn_switch_ime",
-                buttonSize = buttonSize,
-                onClick = onSwitchIme
-            )
+                if (settings.navBarShowLineJump) {
+                    NavBarIconButton(
+                        icon = Icons.AutoMirrored.Filled.LastPage,
+                        contentDescription = "Cuối dòng",
+                        colorScheme = colorScheme,
+                        testTag = "nav_btn_last_page",
+                        buttonSize = buttonSize,
+                        onClick = onMoveCursorEnd
+                    )
+                }
+            }
 
             if (settings.navBarShowHideKeyboard) {
                 NavBarIconButton(
                     icon = Icons.Default.KeyboardHide,
-                    contentDescription = "Thu bàn phím",
+                    contentDescription = "Ẩn bàn phím",
                     colorScheme = colorScheme,
                     testTag = "nav_btn_hide_keyboard",
                     buttonSize = buttonSize,

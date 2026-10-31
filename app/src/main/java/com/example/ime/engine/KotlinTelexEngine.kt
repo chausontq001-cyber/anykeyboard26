@@ -3,7 +3,7 @@ package com.example.ime.engine
 import com.example.ime.model.TonePlacement
 
 /**
- * Pure Kotlin implementation of Vietnamese Telex input engine.
+ * Pure Kotlin implementation of simplified Vietnamese Telex input.
  * Requires no native C++/Rust JNI libraries, avoiding UnsatisfiedLinkError crashes.
  */
 class KotlinTelexEngine : TelexEngine {
@@ -45,7 +45,6 @@ class KotlinTelexEngine : TelexEngine {
 
         for (ch in rawChars) {
             val lower = ch.lowercaseChar()
-            val isUpper = ch.isUpperCase()
 
             when (lower) {
                 's' -> {
@@ -127,39 +126,6 @@ class KotlinTelexEngine : TelexEngine {
                         text.append(ch)
                     } else {
                         text.append(ch)
-                    }
-                }
-                'w' -> {
-                    if (text.isNotEmpty()) {
-                        val lastIdx = text.length - 1
-                        val prevLower = text[lastIdx].lowercaseChar()
-                        val prevUpper = text[lastIdx].isUpperCase()
-
-                        if (text.length >= 2 && text.substring(text.length - 2).lowercase() == "uo") {
-                            val uUpper = text[text.length - 2].isUpperCase()
-                            val oUpper = text[text.length - 1].isUpperCase()
-                            text.setCharAt(text.length - 2, if (uUpper) 'Ư' else 'ư')
-                            text.setCharAt(text.length - 1, if (oUpper) 'Ơ' else 'ơ')
-                        } else if (prevLower == 'a') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'Ă' else 'ă')
-                        } else if (prevLower == 'o') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'Ơ' else 'ơ')
-                        } else if (prevLower == 'u') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'Ư' else 'ư')
-                        } else if (prevLower == 'ă') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'A' else 'a')
-                            text.append(ch)
-                        } else if (prevLower == 'ơ') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'O' else 'o')
-                            text.append(ch)
-                        } else if (prevLower == 'ư') {
-                            text.setCharAt(lastIdx, if (prevUpper) 'U' else 'u')
-                            text.append(ch)
-                        } else {
-                            text.append(if (isUpper) 'Ư' else 'ư')
-                        }
-                    } else {
-                        text.append(if (isUpper) 'Ư' else 'ư')
                     }
                 }
                 'e' -> {

@@ -97,6 +97,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -170,7 +171,6 @@ fun ComposeKeyboardView(
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
     onPaste: () -> Unit,
-    onSwitchIme: () -> Unit,
     onHideKeyboard: () -> Unit,
     onCycleLanguage: () -> Unit,
     onToggleTypingMethod: () -> Unit,
@@ -358,7 +358,6 @@ fun ComposeKeyboardView(
                         onMoveCursorEnd = onMoveCursorEnd,
                         onSelectAll = onSelectAll,
                         onPaste = onPaste,
-                        onSwitchIme = onSwitchIme,
                         onHideKeyboard = onHideKeyboard,
                         onCycleLanguage = onCycleLanguage,
                         onToggleShift = {
@@ -423,7 +422,6 @@ fun ComposeKeyboardView(
                 onMoveCursorEnd = onMoveCursorEnd,
                 onSelectAll = onSelectAll,
                 onPaste = onPaste,
-                onSwitchIme = onSwitchIme,
                 onHideKeyboard = onHideKeyboard,
                 onCycleLanguage = onCycleLanguage,
                 onToggleShift = {
@@ -478,7 +476,6 @@ private fun KeyboardContentWrapper(
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
     onPaste: () -> Unit,
-    onSwitchIme: () -> Unit,
     onHideKeyboard: () -> Unit,
     onCycleLanguage: () -> Unit,
     onToggleShift: () -> Unit,
@@ -715,9 +712,9 @@ private fun KeyboardContentWrapper(
                 triggerHaptic()
                 onPaste()
             },
-            onSwitchIme = {
+            onCycleLanguage = {
                 triggerHaptic()
-                onSwitchIme()
+                onCycleLanguage()
             },
             onHideKeyboard = {
                 triggerHaptic()
@@ -1560,6 +1557,7 @@ private fun RowScope.SpaceGestureKeyCap(
     val cursorStepPx = with(LocalDensity.current) {
         (height * 0.4f).toPx().coerceAtLeast(12.dp.toPx())
     }
+    val touchSlop = LocalViewConfiguration.current.touchSlop
 
     Box(
         modifier = Modifier
@@ -1572,8 +1570,7 @@ private fun RowScope.SpaceGestureKeyCap(
             .pointerInput(settings.swipeSpaceToMoveCursor, settings.holdSpaceToSwitchLanguage) {
                 coroutineScope {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val pressStartTime = System.currentTimeMillis()
+                        val down = awaitFirstDown(requireUnconsumed = true)
                         var lastX = down.position.x
                         var lastY = down.position.y
                         var totalDragX = 0f
@@ -1582,8 +1579,8 @@ private fun RowScope.SpaceGestureKeyCap(
                         var emittedCursorStepsY = 0
                         var didMoveCursor = false
                         var didSwitchLanguage = false
-                        var didTouchpadGesture = false
                         var didLongPress = false
+                        var hasExceededTouchSlop = false
                         isLongPressLanguageSwitch = false
                         hasMovedCursorEarly = false
 
@@ -1607,19 +1604,25 @@ private fun RowScope.SpaceGestureKeyCap(
                                 lastY = change.position.y
                                 totalDragX += dragX
                                 totalDragY += dragY
-                                val duration = System.currentTimeMillis() - pressStartTime
+                                if (!hasExceededTouchSlop &&
+                                    abs(totalDragX) + abs(totalDragY) > touchSlop
+                                ) {
+                                    hasExceededTouchSlop = true
+                                    hasMovedCursorEarly = true
+                                }
 
                                 if (isLongPressLanguageSwitch && !didSwitchLanguage) {
                                     if (abs(totalDragX) > 40f) {
                                         onCycleLanguage()
                                         didSwitchLanguage = true
                                     }
-                                } else if (!isLongPressLanguageSwitch && settings.swipeSpaceToMoveCursor) {
+                                } else if (
+                                    hasExceededTouchSlop &&
+                                    !isLongPressLanguageSwitch &&
+                                    settings.swipeSpaceToMoveCursor
+                                ) {
                                     touchpadPosition = change.position
-                                    if (abs(change.position.x - down.position.x) + abs(change.position.y - down.position.y) > 8f) {
-                                        touchpadActive = true
-                                        didTouchpadGesture = true
-                                    }
+                                    touchpadActive = true
                                     val targetStepsX = (totalDragX * 1.4f / cursorStepPx).toInt()
                                     val targetStepsY = (totalDragY * 1.4f / cursorStepPx).toInt()
                                     val stepsX = targetStepsX - emittedCursorStepsX
@@ -1630,10 +1633,9 @@ private fun RowScope.SpaceGestureKeyCap(
                                         emittedCursorStepsY = targetStepsY
                                         didMoveCursor = true
                                     }
-                                    if (didMoveCursor && duration < 700) hasMovedCursorEarly = true
                                 }
 
-                                if (abs(dragX) > 2f || abs(dragY) > 2f || isLongPressLanguageSwitch) change.consume()
+                                if (hasExceededTouchSlop || isLongPressLanguageSwitch) change.consume()
                             }
                         } finally {
                             languageSwitchJob.cancel()
@@ -1642,9 +1644,7 @@ private fun RowScope.SpaceGestureKeyCap(
                             touchpadActive = false
                         }
 
-                        if (!didMoveCursor && !didSwitchLanguage && !didTouchpadGesture && !didLongPress &&
-                            abs(totalDragX) < cursorStepPx && abs(totalDragY) < cursorStepPx
-                        ) onClick()
+                        if (!didMoveCursor && !didSwitchLanguage && !didLongPress) onClick()
                     }
                 }
             }

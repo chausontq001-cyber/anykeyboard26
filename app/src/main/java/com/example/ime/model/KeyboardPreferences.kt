@@ -34,10 +34,11 @@ data class KeyboardSettings(
     val showNumberRow: Boolean = false,
     val showNumberRowInLandscape: Boolean = false,
     val spaceBarVietnameseIndicator: Boolean = true,
-    val navBarShowCursorArrows: Boolean = true,
-    val navBarShowLineJump: Boolean = true,
-    val navBarShowSelectAll: Boolean = true,
-    val navBarShowPaste: Boolean = true,
+    val navBarShowCursorArrows: Boolean = false,
+    val navBarShowLineJump: Boolean = false,
+    val navBarShowSelectAll: Boolean = false,
+    val navBarShowPaste: Boolean = false,
+    val navBarShowLanguageSwitch: Boolean = true,
     val navBarShowHideKeyboard: Boolean = true,
     // Gesture options
     val swipeSpaceToMoveCursor: Boolean = true,
@@ -75,7 +76,22 @@ class KeyboardPreferences(context: Context) {
 
     init {
         prefs.registerOnSharedPreferenceChangeListener(listener)
+        migrateNavigationBarDefaults()
         reloadSettings()
+    }
+
+    private fun migrateNavigationBarDefaults() {
+        if (prefs.getInt(KEY_NAV_BAR_DEFAULTS_VERSION, 0) >= NAV_BAR_DEFAULTS_VERSION) return
+
+        prefs.edit()
+            .putBoolean(KEY_NAV_ARROWS, false)
+            .putBoolean(KEY_NAV_LINE_JUMP, false)
+            .putBoolean(KEY_NAV_SELECT_ALL, false)
+            .putBoolean(KEY_NAV_PASTE, false)
+            .putBoolean(KEY_NAV_LANGUAGE_SWITCH, true)
+            .putBoolean(KEY_NAV_HIDE_KB, true)
+            .putInt(KEY_NAV_BAR_DEFAULTS_VERSION, NAV_BAR_DEFAULTS_VERSION)
+            .apply()
     }
 
     private fun reloadSettings() {
@@ -130,10 +146,11 @@ class KeyboardPreferences(context: Context) {
             showNumberRow = prefs.getBoolean(KEY_SHOW_NUMBER_ROW, false),
             showNumberRowInLandscape = prefs.getBoolean(KEY_SHOW_NUMBER_ROW_LANDSCAPE, false),
             spaceBarVietnameseIndicator = prefs.getBoolean(KEY_SPACE_INDICATOR, true),
-            navBarShowCursorArrows = prefs.getBoolean(KEY_NAV_ARROWS, true),
-            navBarShowLineJump = prefs.getBoolean(KEY_NAV_LINE_JUMP, true),
-            navBarShowSelectAll = prefs.getBoolean(KEY_NAV_SELECT_ALL, true),
-            navBarShowPaste = prefs.getBoolean(KEY_NAV_PASTE, true),
+            navBarShowCursorArrows = prefs.getBoolean(KEY_NAV_ARROWS, false),
+            navBarShowLineJump = prefs.getBoolean(KEY_NAV_LINE_JUMP, false),
+            navBarShowSelectAll = prefs.getBoolean(KEY_NAV_SELECT_ALL, false),
+            navBarShowPaste = prefs.getBoolean(KEY_NAV_PASTE, false),
+            navBarShowLanguageSwitch = prefs.getBoolean(KEY_NAV_LANGUAGE_SWITCH, true),
             navBarShowHideKeyboard = prefs.getBoolean(KEY_NAV_HIDE_KB, true),
             swipeSpaceToMoveCursor = prefs.getBoolean(KEY_SWIPE_SPACE_CURSOR, true),
             holdSpaceToSwitchLanguage = prefs.getBoolean(KEY_HOLD_SPACE_LANG, true),
@@ -190,6 +207,7 @@ class KeyboardPreferences(context: Context) {
             putBoolean(KEY_NAV_LINE_JUMP, updated.navBarShowLineJump)
             putBoolean(KEY_NAV_SELECT_ALL, updated.navBarShowSelectAll)
             putBoolean(KEY_NAV_PASTE, updated.navBarShowPaste)
+            putBoolean(KEY_NAV_LANGUAGE_SWITCH, updated.navBarShowLanguageSwitch)
             putBoolean(KEY_NAV_HIDE_KB, updated.navBarShowHideKeyboard)
             putBoolean(KEY_SWIPE_SPACE_CURSOR, updated.swipeSpaceToMoveCursor)
             putBoolean(KEY_HOLD_SPACE_LANG, updated.holdSpaceToSwitchLanguage)
@@ -253,7 +271,10 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_NAV_LINE_JUMP = "nav_line_jump"
         private const val KEY_NAV_SELECT_ALL = "nav_select_all"
         private const val KEY_NAV_PASTE = "nav_paste"
+        private const val KEY_NAV_LANGUAGE_SWITCH = "nav_language_switch"
         private const val KEY_NAV_HIDE_KB = "nav_hide_kb"
+        private const val KEY_NAV_BAR_DEFAULTS_VERSION = "nav_bar_defaults_version"
+        private const val NAV_BAR_DEFAULTS_VERSION = 1
         private const val KEY_SWIPE_SPACE_CURSOR = "swipe_space_cursor"
         private const val KEY_HOLD_SPACE_LANG = "hold_space_lang"
         private const val KEY_SWIPE_BACKSPACE_DELETE = "swipe_backspace_delete"

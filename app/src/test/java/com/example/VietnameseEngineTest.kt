@@ -6,6 +6,7 @@ import com.example.ime.engine.VietnameseEngine
 import com.example.ime.engine.VietnameseCharUtils
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
+import com.example.ime.model.KeyboardSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,7 +59,40 @@ class VietnameseEngineTest {
     @Test
     fun telexSequenceRestoresCommittedVietnameseTextForRecomposition() {
         assertEquals("cas", VietnameseCharUtils.toTelexSequence("cá"))
-        assertEquals("dduwowfng", VietnameseCharUtils.toTelexSequence("đường"))
+        assertEquals("ddươfng", VietnameseCharUtils.toTelexSequence("đường"))
+    }
+
+    @Test
+    fun simplifiedTelexKeepsWAsALiteralAndStillComposesBasicModifiers() {
+        val engine = VietnameseEngine(typingMethod = TypingMethod.TELEX)
+
+        "w".forEach { engine.processChar(it) }
+        assertEquals("w", engine.composedWord)
+
+        engine.reset()
+        "awowuw".forEach { engine.processChar(it) }
+        assertEquals("awowuw", engine.composedWord)
+
+        engine.reset()
+        "aas".forEach { engine.processChar(it) }
+        assertEquals("ấ", engine.composedWord)
+
+        engine.reset()
+        "dd".forEach { engine.processChar(it) }
+        assertEquals("đ", engine.composedWord)
+        engine.close()
+    }
+
+    @Test
+    fun virtualNavigationDefaultsToLanguageAndHideKeyboardButtons() {
+        val settings = KeyboardSettings()
+
+        assertTrue(settings.navBarShowLanguageSwitch)
+        assertTrue(settings.navBarShowHideKeyboard)
+        assertTrue(!settings.navBarShowCursorArrows)
+        assertTrue(!settings.navBarShowLineJump)
+        assertTrue(!settings.navBarShowSelectAll)
+        assertTrue(!settings.navBarShowPaste)
     }
 
     @Test

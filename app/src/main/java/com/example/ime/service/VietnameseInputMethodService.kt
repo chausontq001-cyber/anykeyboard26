@@ -2,7 +2,6 @@ package com.example.ime.service
 
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
@@ -10,7 +9,6 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.ExtractedTextRequest
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -198,7 +196,6 @@ class VietnameseInputMethodService : InputMethodService(),
                         onMoveCursorEnd = { moveCursorEnd() },
                         onSelectAll = { selectAll() },
                         onPaste = { paste() },
-                        onSwitchIme = { switchIme() },
                         onHideKeyboard = { requestHideSelf(0) },
                         onCycleLanguage = { cycleNextLanguage() },
                         onToggleTypingMethod = {
@@ -732,19 +729,4 @@ class VietnameseInputMethodService : InputMethodService(),
         currentInputConnection?.performContextMenuAction(android.R.id.paste)
     }
 
-    private fun switchIme() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val switched = switchToNextInputMethod(false)
-            if (!switched) {
-                showImePicker()
-            }
-        } else {
-            showImePicker()
-        }
-    }
-
-    private fun showImePicker() {
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.showInputMethodPicker()
-    }
 }

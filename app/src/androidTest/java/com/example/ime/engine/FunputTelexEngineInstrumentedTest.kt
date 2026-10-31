@@ -38,7 +38,7 @@ class FunputTelexEngineInstrumentedTest {
             assertEquals("tiếng", engine.composedWord)
 
             engine.reset()
-            "dduongwf".forEach { engine.processChar(it) }
+            "ddươfng".forEach { engine.processChar(it) }
             assertEquals("đường", engine.composedWord)
         } finally {
             engine.close()

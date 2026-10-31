@@ -59,12 +59,9 @@ object VietnameseCharUtils {
             val baseChar = toneInfo?.first ?: char
             val lower = baseChar.lowercaseChar()
             val spelling = when (lower) {
-                'ă' -> "aw"
                 'â' -> "aa"
                 'ê' -> "ee"
                 'ô' -> "oo"
-                'ơ' -> "ow"
-                'ư' -> "uw"
                 'đ' -> "dd"
                 else -> baseChar.toString()
             }
