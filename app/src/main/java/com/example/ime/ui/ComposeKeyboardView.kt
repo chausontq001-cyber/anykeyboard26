@@ -67,11 +67,14 @@ import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -151,6 +154,7 @@ fun ComposeKeyboardView(
     settings: KeyboardSettings,
     composingWord: String,
     suggestions: List<String>,
+    hasActiveSelection: () -> Boolean = { false },
     onKeyTyped: (Char) -> Unit,
     onBackspace: () -> Unit,
     onStartDeleteSelection: () -> Unit,
@@ -238,8 +242,9 @@ fun ComposeKeyboardView(
             layoutMode == KeyboardLayoutMode.ALPHA && keyboardSettings.showNumberRow -> 4.8f
             else -> 4f
         }
+        val isSuggestionsActive = keyboardSettings.showSuggestions && keyboardSettings.smartFeaturesEnabled
         val reservedHeight =
-            (if (keyboardSettings.showSuggestions || composingWord.isNotEmpty()) 42.dp else 0.dp) +
+            (if (isSuggestionsActive) 42.dp else 0.dp) +
                 (if (keyboardSettings.showVirtualNavBar && !hideVirtualNavigationBar) {
                     keyboardSettings.bottomChinHeightDp.dp
                 } else {

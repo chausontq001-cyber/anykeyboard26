@@ -172,6 +172,7 @@ class VietnameseInputMethodService : InputMethodService(),
                         settings = settings,
                         composingWord = composingWordState,
                         suggestions = suggestionsState,
+                        hasActiveSelection = { hasActiveSelection() },
                         onKeyTyped = { c -> handleKeyTyped(c) },
                         onBackspace = { handleBackspace() },
                         onStartDeleteSelection = { beginDeleteSelection() },
@@ -242,6 +243,11 @@ class VietnameseInputMethodService : InputMethodService(),
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         } catch (e: Exception) {
             Log.e(TAG, "Error onStartInputView", e)
+        }
+        val currentSettings = preferences.settings.value
+        if (!currentSettings.showSuggestions || !currentSettings.smartFeaturesEnabled) {
+            suggestionsState = emptyList()
+            setCandidatesViewShown(false)
         }
         resetComposing()
     }
@@ -376,8 +382,37 @@ class VietnameseInputMethodService : InputMethodService(),
         }
     }
 
+    private fun hasActiveSelection(): Boolean {
+        val ic = currentInputConnection ?: return false
+        val selected = ic.getSelectedText(0)
+        if (!selected.isNullOrEmpty()) return true
+        val extracted = getExtractedText(ic)
+        return extracted != null &&
+            extracted.selectionStart >= 0 &&
+            extracted.selectionEnd >= 0 &&
+            extracted.selectionStart != extracted.selectionEnd
+    }
+
     private fun handleBackspace() {
         val ic = currentInputConnection ?: return
+
+        // YÊU CẦU 4: Nếu đang có văn bản được bôi đen/chọn, xóa ngay lập tức và thoát
+        val selectedText = ic.getSelectedText(0)
+        val extracted = getExtractedText(ic)
+        val isTextSelected = (!selectedText.isNullOrEmpty()) ||
+            (extracted != null &&
+                extracted.selectionStart >= 0 &&
+                extracted.selectionEnd >= 0 &&
+                extracted.selectionStart != extracted.selectionEnd)
+
+        if (isTextSelected) {
+            resetComposing()
+            ic.commitText("", 1)
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+            updateSuggestions("")
+            return
+        }
+
         refreshInputSelection(ic)
 
         if (engine.isWordActive()) {
@@ -403,6 +438,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun beginDeleteSelection() {
         val ic = currentInputConnection ?: return
+        if (hasActiveSelection()) return
         commitComposingWord()
         deleteSelectionAnchor = null
         deleteSelectionBounds = null
@@ -587,14 +623,27 @@ class VietnameseInputMethodService : InputMethodService(),
     private fun resetComposing() {
         engine.reset()
         composingWordState = ""
-        updateSuggestions("")
+        val settings = preferences.settings.value
+        if (!settings.showSuggestions || !settings.smartFeaturesEnabled) {
+            suggestionsState = emptyList()
+            setCandidatesViewShown(false)
+        } else {
+            updateSuggestions("")
+        }
     }
 
     private fun updateSuggestions(currentWord: String) {
+        val settings = preferences.settings.value
+        if (!settings.showSuggestions || !settings.smartFeaturesEnabled) {
+            suggestionsState = emptyList()
+            setCandidatesViewShown(false)
+            return
+        }
         suggestionsState = VietnameseDictionary.getSuggestions(
             currentWord = currentWord,
             previousWord = lastCommittedWord
         )
+        setCandidatesViewShown(suggestionsState.isNotEmpty())
     }
 
     private fun cycleNextLanguage() {
