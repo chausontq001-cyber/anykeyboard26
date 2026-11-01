@@ -11,6 +11,29 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class FunputTelexEngineInstrumentedTest {
     @Test
+    fun nativeEngineUsesAppTonePlacementLabels() {
+        val modernEngine = FunputTelexEngine()
+        try {
+            modernEngine.configure(TonePlacement.MODERN)
+            var modernResult = ""
+            "hoas".forEach { modernResult = modernEngine.process(it.code) }
+            assertEquals("hóa", modernResult)
+        } finally {
+            modernEngine.close()
+        }
+
+        val classicEngine = FunputTelexEngine()
+        try {
+            classicEngine.configure(TonePlacement.CLASSIC)
+            var classicResult = ""
+            "hoas".forEach { classicResult = classicEngine.process(it.code) }
+            assertEquals("hoá", classicResult)
+        } finally {
+            classicEngine.close()
+        }
+    }
+
+    @Test
     fun nativeEngineComposesTelexAndSupportsBackspace() {
         val engine = VietnameseEngine(
             typingMethod = TypingMethod.TELEX,
