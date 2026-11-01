@@ -57,6 +57,43 @@ class VietnameseEngineTest {
     }
 
     @Test
+    fun vniHonorsModernAndClassicTonePlacement() {
+        val engine = VietnameseEngine(
+            typingMethod = TypingMethod.VNI,
+            tonePlacement = TonePlacement.MODERN
+        )
+
+        "hoa1".forEach { engine.processChar(it) }
+        assertEquals("hóa", engine.composedWord)
+
+        engine.reset()
+        engine.tonePlacement = TonePlacement.CLASSIC
+        "hoa1".forEach { engine.processChar(it) }
+        assertEquals("hoá", engine.composedWord)
+
+        engine.reset()
+        "khoe3".forEach { engine.processChar(it) }
+        assertEquals("khoẻ", engine.composedWord)
+
+        engine.reset()
+        "thuy1".forEach { engine.processChar(it) }
+        assertEquals("thuý", engine.composedWord)
+
+        engine.reset()
+        "toan1".forEach { engine.processChar(it) }
+        assertEquals("toán", engine.composedWord)
+
+        engine.reset()
+        "qua3".forEach { engine.processChar(it) }
+        assertEquals("quả", engine.composedWord)
+
+        engine.reset()
+        "gia1".forEach { engine.processChar(it) }
+        assertEquals("giá", engine.composedWord)
+        engine.close()
+    }
+
+    @Test
     fun telexSequenceRestoresCommittedVietnameseTextForRecomposition() {
         assertEquals("cas", VietnameseCharUtils.toTelexSequence("cá"))
         assertEquals("ddươfng", VietnameseCharUtils.toTelexSequence("đường"))

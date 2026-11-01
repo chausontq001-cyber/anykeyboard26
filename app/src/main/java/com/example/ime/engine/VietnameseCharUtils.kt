@@ -81,51 +81,42 @@ object VietnameseCharUtils {
     }
 
     /**
-     * Determines which vowel index in a vowel cluster should receive the tone mark.
-     * Supports both modern (hóa, thúy) and classic (hoá, thuý) rules.
+     * Finds the character index that receives the tone for the current syllable.
+     * MODERN follows the displayed app rule (hóa, hòa, thúy, khỏe); CLASSIC uses
+     * the alternate open-pair spelling (hoá, hoà, thuý, khoẻ).
      */
-    fun findToneVowelIndex(
-        vowelCluster: String,
-        hasEndingConsonant: Boolean,
-        tonePlacement: TonePlacement
-    ): Int {
-        val lower = vowelCluster.lowercase()
-        val len = lower.length
-        if (len == 0) return 0
-        if (len == 1) return 0
+    fun findToneVowelIndex(text: String, tonePlacement: TonePlacement): Int {
+        val vowelIndices = text.indices.filter { isVowel(text[it]) }
+        if (vowelIndices.isEmpty()) return -1
 
-        // If cluster contains circumflex (ê, ô, â) or horn (ơ, ư), tone usually goes to it
-        val specializedIndex = lower.indexOfFirst { it in "êôâơư" }
-        if (specializedIndex != -1) {
-            // For ươ, tone goes to ơ
-            if (lower.contains("ươ")) {
-                return lower.indexOf("ơ")
+        val firstVowelIndex = vowelIndices.first()
+        val startsWithGlideOnset = vowelIndices.size > 1 &&
+            firstVowelIndex == 1 &&
+            (text.startsWith("qu", ignoreCase = true) ||
+                text.startsWith("gi", ignoreCase = true))
+        val clusterIndices = if (startsWithGlideOnset) {
+            vowelIndices.drop(1)
+        } else {
+            vowelIndices
+        }
+        val cluster = clusterIndices.joinToString("") { text[it].lowercaseChar().toString() }
+        val hasEndingConsonant = clusterIndices.last() < text.lastIndex
+        val specializedIndex = cluster.indexOfFirst { it in "ăâêôơư" }
+        val relativeIndex = when {
+            specializedIndex >= 0 && cluster.contains("ươ") -> cluster.indexOf('ơ')
+            specializedIndex >= 0 -> specializedIndex
+            cluster.startsWith("oa") || cluster.startsWith("oe") ||
+                cluster.startsWith("uy") -> when {
+                hasEndingConsonant -> 1
+                tonePlacement == TonePlacement.MODERN -> 0
+                else -> 1
             }
-            return specializedIndex
+            cluster.startsWith("ia") || cluster.startsWith("ya") ||
+                cluster.startsWith("ua") || cluster.startsWith("ưa") -> 0
+            cluster.length == 3 -> 1
+            hasEndingConsonant && cluster.length >= 2 -> 1
+            else -> 0
         }
-
-        // For dipthongs: oa, oe, uy
-        if (lower.startsWith("oa") || lower.startsWith("oe") || lower.startsWith("uy")) {
-            return if (hasEndingConsonant) {
-                // If there's an ending consonant (hoàng, quyến, khoán), tone is on the second vowel
-                1
-            } else {
-                // No ending consonant (hóa vs hoá)
-                if (tonePlacement == TonePlacement.MODERN) 1 else 0
-            }
-        }
-
-        // For dipthongs ia, ya, ua, ưa: tone is on the first vowel (mía, múa, mứa)
-        if (lower.startsWith("ia") || lower.startsWith("ya") || lower.startsWith("ua") || lower.startsWith("ưa")) {
-            return 0
-        }
-
-        // For tripthongs: iêu, oai, uôi, uya, yêu, etc.
-        if (len == 3) {
-            return 1 // Center vowel
-        }
-
-        // Default: if ending consonant exists, place on 2nd vowel if 2 vowels; else 1st
-        return if (hasEndingConsonant && len >= 2) 1 else 0
+        return clusterIndices[relativeIndex.coerceIn(clusterIndices.indices)]
     }
 }

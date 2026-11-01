@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.ime.engine.KotlinTelexEngine
+import com.example.ime.model.TonePlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,9 +23,23 @@ class KotlinTelexEngineTest {
     @Test
     fun convertsToneKeysAndPlacesToneInSpecifiedVowelClusters() {
         assertEquals("á", type("as"))
-        assertEquals("oá", type("oas"))
+        assertEquals("óa", type("oas"))
         assertEquals("oái", type("oais"))
         assertEquals("uáy", type("uays"))
+    }
+
+    @Test
+    fun appliesModernAndClassicTonePlacementWithoutChangingOtherSyllableRules() {
+        assertEquals("hóa", type("hoas", TonePlacement.MODERN))
+        assertEquals("hoá", type("hoas", TonePlacement.CLASSIC))
+        assertEquals("khỏe", type("khoer", TonePlacement.MODERN))
+        assertEquals("khoẻ", type("khoer", TonePlacement.CLASSIC))
+        assertEquals("thúy", type("thuys", TonePlacement.MODERN))
+        assertEquals("thuý", type("thuys", TonePlacement.CLASSIC))
+        assertEquals("hoàng", type("hoangf", TonePlacement.MODERN))
+        assertEquals("hoàng", type("hoangf", TonePlacement.CLASSIC))
+        assertEquals("quá", type("quas", TonePlacement.MODERN))
+        assertEquals("giá", type("gias", TonePlacement.CLASSIC))
     }
 
     @Test
@@ -79,6 +94,9 @@ class KotlinTelexEngineTest {
     }
 
     private fun type(input: String): String = type(KotlinTelexEngine(), input)
+
+    private fun type(input: String, placement: TonePlacement): String =
+        type(KotlinTelexEngine().apply { configure(placement) }, input)
 
     private fun type(engine: KotlinTelexEngine, input: String): String =
         input.fold("") { _, key -> engine.processKey(key.toString()) }

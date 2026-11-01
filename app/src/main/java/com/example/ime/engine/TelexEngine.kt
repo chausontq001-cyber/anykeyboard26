@@ -148,25 +148,13 @@ open class TelexEngine : AutoCloseable {
     }
 
     private fun applyTone(key: Char, tone: Int) {
-        val vowelIndices = buffer.indices.filter { VietnameseCharUtils.isVowel(buffer[it]) }
-        if (vowelIndices.isEmpty()) {
+        val targetIndex = VietnameseCharUtils.findToneVowelIndex(
+            buffer.toString(),
+            tonePlacement
+        )
+        if (targetIndex < 0) {
             buffer.append(key)
             return
-        }
-
-        val bases = vowelIndices.map {
-            baseVowel(buffer[it]).lowercaseChar()
-        }.joinToString("")
-        val targetIndex = when {
-            vowelIndices.size == 1 -> vowelIndices.first()
-            vowelIndices.size == 3 -> vowelIndices[1]
-            vowelIndices.size == 2 && (
-                bases in setOf("oa", "oe", "uy", "ươ") ||
-                    vowelIndices.any {
-                        VietnameseCharUtils.removeTone(buffer[it]).lowercaseChar() in "âêôơư"
-                    }
-                ) -> vowelIndices.last()
-            else -> vowelIndices.first()
         }
 
         val previousText = buffer.toString()

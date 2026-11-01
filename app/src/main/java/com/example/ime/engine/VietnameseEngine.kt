@@ -239,29 +239,8 @@ class VietnameseEngine(
         tone: Int,
         placement: TonePlacement
     ): String {
-        // Find vowel clusters
-        var firstVowel = -1
-        var lastVowel = -1
-
-        for (i in text.indices) {
-            if (VietnameseCharUtils.isVowel(text[i])) {
-                if (firstVowel == -1) firstVowel = i
-                lastVowel = i
-            }
-        }
-
-        if (firstVowel == -1) return text // No vowels found
-
-        val vowelCluster = text.substring(firstVowel, lastVowel + 1)
-        val hasEndingConsonant = lastVowel < text.length - 1
-
-        val relativeToneIndex = VietnameseCharUtils.findToneVowelIndex(
-            vowelCluster,
-            hasEndingConsonant,
-            placement
-        )
-
-        val targetCharIndex = firstVowel + relativeToneIndex
+        val targetCharIndex = VietnameseCharUtils.findToneVowelIndex(text, placement)
+        if (targetCharIndex < 0) return text
         val targetChar = text[targetCharIndex]
         val tonedChar = VietnameseCharUtils.applyTone(targetChar, tone)
 

@@ -9,10 +9,11 @@ internal class FunputTelexEngine : TelexEngine() {
     }
 
     override fun configure(tonePlacement: TonePlacement) = withHandle { value ->
+        // Funput names the first-vowel style "Traditional" and the second-vowel style "Modern".
         FunputNative.nativeConfigure(
             value,
             TelexMethod,
-            if (tonePlacement == TonePlacement.MODERN) ModernToneStyle else TraditionalToneStyle,
+            if (tonePlacement == TonePlacement.MODERN) TraditionalToneStyle else ModernToneStyle,
             smartRestore = false,
             eagerRestore = false,
             spellCheck = false,
