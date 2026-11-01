@@ -918,7 +918,7 @@ private fun KeyboardMainContent(
                         )
                     }
 
-                    // Row 4: ?123, Emoji, Left Space  --- GAP (Arrows) ---  Right Space, ., Enter
+                    // Row 4: ?123, Emoji, Comma, Left Space  --- GAP (Arrows) ---  Right Space, ., Enter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -926,10 +926,14 @@ private fun KeyboardMainContent(
                     ) {
                         val splitSpaceWeight = 2.5f +
                             ((if (settings.showEmojiKey) 0f else 1f) +
+                                (if (settings.showCommaKey) 0f else 1f) +
                                 (if (settings.showPeriodKey) 0f else 0.9f)) / 2f
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (13 * fontScale).sp, isSpecial = true, weight = 1.2f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         if (settings.showEmojiKey) {
                             SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
+                        }
+                        if (settings.showCommaKey) {
+                            KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
                         }
                         SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
 
@@ -989,10 +993,10 @@ private fun KeyboardMainContent(
                         if (settings.showEmojiKey) {
                             SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         }
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                         if (settings.showCommaKey) {
                             KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
                         }
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                         if (settings.showPeriodKey) {
                             KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
                         }
@@ -1030,10 +1034,10 @@ private fun KeyboardMainContent(
                     if (settings.showEmojiKey) {
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                     }
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = symbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                     if (settings.showCommaKey) {
                         KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
                     }
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = symbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                     SpecialKeyCap(icon = enterIcon, contentDescription = enterDesc, colorScheme = colorScheme, isAccent = true, height = baseKeyHeight, weight = 1.4f, onClick = onEnter)
                 }
             }
