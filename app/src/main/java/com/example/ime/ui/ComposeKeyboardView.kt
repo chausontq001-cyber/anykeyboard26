@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.ViewConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -95,6 +96,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -971,14 +973,18 @@ private fun KeyboardMainContent(
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val alphaSpaceWeight = 4.2f +
+                        val alphaSpaceWeight = 3.2f +
                             (if (settings.showEmojiKey) 0f else 1f) +
-                            (if (settings.showPeriodKey) 0f else 1f)
+                            (if (settings.showPeriodKey) 0f else 1f) +
+                            (if (settings.showCommaKey) 0f else 1f)
                         KeyCap(text = "?123", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (14 * fontScale).sp, isSpecial = true, weight = 1.4f, showPreview = false, onClick = { onSwitchLayout(KeyboardLayoutMode.NUMBERS_SYMBOLS) })
                         if (settings.showEmojiKey) {
                             SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         }
                         SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        if (settings.showCommaKey) {
+                            KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
+                        }
                         if (settings.showPeriodKey) {
                             KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
                         }
@@ -1536,7 +1542,8 @@ private fun RowScope.BackspaceGestureKeyCap(
 ) {
     var isSwiping by remember { mutableStateOf(false) }
     val selectionStepPx = with(LocalDensity.current) { 18.dp.toPx() }
-    val touchSlop = LocalViewConfiguration.current.touchSlop
+    val context = LocalContext.current
+    val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
     Box(
         modifier = Modifier
@@ -1706,6 +1713,7 @@ private fun RowScope.SpaceGestureKeyCap(
                         var didSwitchLanguage = false
                         var didLongPress = false
                         var hasExceededTouchSlop = false
+                        var releasedNormally = false
                         isLongPressLanguageSwitch = false
                         hasMovedCursorEarly = false
 
@@ -1721,8 +1729,6 @@ private fun RowScope.SpaceGestureKeyCap(
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
-
                                 val dragX = change.position.x - lastX
                                 val dragY = change.position.y - lastY
                                 lastX = change.position.x
@@ -1730,10 +1736,16 @@ private fun RowScope.SpaceGestureKeyCap(
                                 totalDragX += dragX
                                 totalDragY += dragY
                                 if (!hasExceededTouchSlop &&
-                                    totalDragX * totalDragX + totalDragY * totalDragY > touchSlop * touchSlop
+                                    (abs(change.position.x - down.position.x) > touchSlop ||
+                                        abs(change.position.y - down.position.y) > touchSlop)
                                 ) {
                                     hasExceededTouchSlop = true
                                     hasMovedCursorEarly = true
+                                }
+
+                                if (!change.pressed) {
+                                    releasedNormally = event.type == PointerEventType.Release
+                                    break
                                 }
 
                                 if (isLongPressLanguageSwitch && !didSwitchLanguage) {
@@ -1768,7 +1780,9 @@ private fun RowScope.SpaceGestureKeyCap(
                             touchpadActive = false
                         }
 
-                        if (!hasExceededTouchSlop && !didSwitchLanguage && !didLongPress) onTap()
+                        if (releasedNormally && !hasExceededTouchSlop && !didSwitchLanguage && !didLongPress) {
+                            onTap()
+                        }
                     }
                 }
             }
