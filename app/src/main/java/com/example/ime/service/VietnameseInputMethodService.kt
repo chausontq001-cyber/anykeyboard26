@@ -217,13 +217,18 @@ class VietnameseInputMethodService : InputMethodService(),
                         onMoveCursorByTouchpad = { horizontal, vertical ->
                             moveCursorByTouchpad(horizontal, vertical)
                         },
+                        onStartSpaceSwipe = { finishCurrentWord() },
                         onMoveCursorStart = { moveCursorStart() },
                         onMoveCursorEnd = { moveCursorEnd() },
                         onSelectAll = { selectAll() },
                         onPaste = { paste() },
-                        onHideKeyboard = { requestHideSelf(0) },
+                        onHideKeyboard = {
+                            finishCurrentWord()
+                            requestHideSelf(0)
+                        },
                         onCycleLanguage = { cycleNextLanguage() },
                         onToggleTypingMethod = {
+                            finishCurrentWord()
                             val current = settings.typingMethod
                             val next = when (current) {
                                 TypingMethod.TELEX -> TypingMethod.VNI
@@ -236,6 +241,7 @@ class VietnameseInputMethodService : InputMethodService(),
                             preferences.updateSettings { it.copy(alignment = newAlignment) }
                         },
                         onOpenSettings = {
+                            finishCurrentWord()
                             val intent = Intent(this@VietnameseInputMethodService, MainActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
@@ -305,7 +311,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        commitComposingWord()
+        finishCurrentWord()
         try {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
@@ -373,6 +379,11 @@ class VietnameseInputMethodService : InputMethodService(),
             handleTelexKeyTyped(c, ic)
             return
         }
+        if (!c.isLetter() &&
+            !(engine.typingMethod == TypingMethod.VNI && c.isDigit())
+        ) {
+            finishCurrentWord(ic)
+        }
 
         when (val result = engine.processChar(c)) {
             is VietnameseEngine.ProcessResult.Composing -> {
@@ -383,14 +394,14 @@ class VietnameseInputMethodService : InputMethodService(),
             }
             is VietnameseEngine.ProcessResult.WordBoundary -> {
                 if (result.committedWord.isNotEmpty()) {
-                    commitTextAtCurrentSelection(ic, result.committedWord)
+                    ic.finishComposingText()
                     lastCommittedWord = result.committedWord
                 }
                 commitTextAtCurrentSelection(ic, result.boundaryChar.toString())
                 resetComposing()
             }
             is VietnameseEngine.ProcessResult.Unhandled -> {
-                commitComposingWord()
+                finishCurrentWord(ic)
                 commitTextAtCurrentSelection(ic, c.toString())
                 resetComposing()
             }
@@ -437,20 +448,14 @@ class VietnameseInputMethodService : InputMethodService(),
             ic.setComposingText(result, 1)
             updateSuggestions(result)
         } else {
-            if (telexEngine.hasInput) {
-                val finalWord = telexEngine.composingText
-                commitTextAtCurrentSelection(ic, finalWord)
-                lastCommittedWord = finalWord
-            }
+            finishCurrentWord(ic)
             commitTextAtCurrentSelection(ic, c.toString())
-            resetComposing()
         }
     }
 
     private fun handleEmojiSelected(emojiString: String) {
         val ic = currentInputConnection ?: return
-        commitComposingWord()
-        telexEngine.reset()
+        finishCurrentWord(ic)
         refreshInputSelection(ic)
         ic.commitText(emojiString, 1)
         updateSuggestions("")
@@ -469,6 +474,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleBackspace() {
         val ic = currentInputConnection ?: return
+        finishCurrentWord(ic)
 
         // YÊU CẦU 4: Nếu đang có văn bản được bôi đen/chọn, xóa ngay lập tức và thoát
         val selectedText = ic.getSelectedText(0)
@@ -481,42 +487,14 @@ class VietnameseInputMethodService : InputMethodService(),
 
         if (isTextSelected) {
             resetComposing()
-            ic.commitText("", 1)
             sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
             updateSuggestions("")
             return
         }
 
         refreshInputSelection(ic)
-
-        if (isComposingActive()) {
-            val handled = if (engine.typingMethod == TypingMethod.TELEX) {
-                telexEngine.hasInput
-            } else {
-                engine.processBackspace()
-            }
-            if (handled) {
-                val composed = currentComposedWord()
-                if (engine.typingMethod == TypingMethod.TELEX) {
-                    composingWordState = telexEngine.backspace()
-                } else {
-                    composingWordState = composed
-                }
-                if (composingWordState.isEmpty()) {
-                    ic.commitText("", 1)
-                    resetComposing()
-                } else {
-                    ic.setComposingText(composingWordState, 1)
-                    updateSuggestions(composingWordState)
-                }
-            } else {
-                resetComposing()
-                ic.deleteSurroundingText(1, 0)
-            }
-        } else {
-            ic.deleteSurroundingText(1, 0)
-            updateSuggestions("")
-        }
+        ic.deleteSurroundingText(1, 0)
+        updateSuggestions("")
     }
 
     private fun handleBackspaceDown(): Boolean {
@@ -529,6 +507,7 @@ class VietnameseInputMethodService : InputMethodService(),
             return false
         }
 
+        finishCurrentWord(ic)
         val downSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
         val upSent = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
         if (!downSent || !upSent) {
@@ -545,7 +524,7 @@ class VietnameseInputMethodService : InputMethodService(),
     private fun beginDeleteSelection() {
         val ic = currentInputConnection ?: return
         if (hasActiveSelection()) return
-        commitComposingWord()
+        finishCurrentWord(ic)
         deleteSelectionAnchor = null
         deleteSelectionBounds = null
         fallbackShiftHeld = false
@@ -614,7 +593,7 @@ class VietnameseInputMethodService : InputMethodService(),
     }
 
     private fun moveCursorByTouchpad(horizontalSteps: Int, verticalSteps: Int) {
-        commitComposingWord()
+        finishCurrentWord()
         val ic = currentInputConnection ?: return
         val extracted = getExtractedText(ic)
         val text = extracted?.text
@@ -646,29 +625,35 @@ class VietnameseInputMethodService : InputMethodService(),
         }
     }
 
-    private fun handleSpace() {
-        val ic = currentInputConnection ?: return
-        if (isComposingActive()) {
-            val finalWord = currentComposedWord()
-            commitTextAtCurrentSelection(ic, "$finalWord ")
+    private fun finishCurrentWord(
+        ic: android.view.inputmethod.InputConnection? = currentInputConnection
+    ): String {
+        if (ic == null) return ""
+        val hasComposingWord = isComposingActive()
+        val finalWord = if (hasComposingWord) currentComposedWord() else ""
+        ic.finishComposingText()
+        engine.reset()
+        telexEngine.reset()
+        composingWordState = ""
+        if (finalWord.isNotEmpty()) {
             lastCommittedWord = finalWord
-            resetComposing()
-        } else {
-            commitTextAtCurrentSelection(ic, " ")
-            if (engine.typingMethod == TypingMethod.TELEX) {
-                telexEngine.reset()
-            }
+        }
+        if (hasComposingWord) {
             updateSuggestions("")
         }
+        return finalWord
+    }
+
+    private fun handleSpace() {
+        val ic = currentInputConnection ?: return
+        finishCurrentWord(ic)
+        commitTextAtCurrentSelection(ic, " ")
+        updateSuggestions("")
     }
 
     private fun handleEnter() {
         val ic = currentInputConnection ?: return
-        if (isComposingActive()) {
-            commitComposingWord()
-        } else if (engine.typingMethod == TypingMethod.TELEX) {
-            telexEngine.reset()
-        }
+        finishCurrentWord(ic)
         val info = currentInputEditorInfo
         val isMulti = info?.let { (it.inputType and android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0 } ?: false
         val imeAction = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
@@ -685,19 +670,29 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleSelectSuggestion(suggestion: String) {
         val ic = currentInputConnection ?: return
-        commitTextAtCurrentSelection(ic, "$suggestion ")
+        val replacedWord = finishCurrentWord(ic)
+        if (replacedWord.isNotEmpty()) {
+            val extracted = getExtractedText(ic)
+            if (extracted == null ||
+                extracted.selectionStart < 0 ||
+                extracted.selectionEnd < 0 ||
+                extracted.selectionStart != extracted.selectionEnd
+            ) {
+                Log.w(TAG, "Unable to locate the committed word for suggestion replacement")
+                return
+            }
+            val selectionEnd = extracted.startOffset + extracted.selectionEnd
+            val selectionStart = selectionEnd - replacedWord.length
+            if (selectionStart < 0 || !ic.setSelection(selectionStart, selectionEnd)) {
+                Log.w(TAG, "Input connection rejected suggestion replacement selection")
+                return
+            }
+            ic.commitText("$suggestion ", 1)
+        } else {
+            commitTextAtCurrentSelection(ic, "$suggestion ")
+        }
         lastCommittedWord = suggestion
         resetComposing()
-    }
-
-    private fun commitComposingWord() {
-        val ic = currentInputConnection ?: return
-        if (isComposingActive()) {
-            val word = currentComposedWord()
-            commitTextAtCurrentSelection(ic, word)
-            lastCommittedWord = word
-            resetComposing()
-        }
     }
 
     private fun refreshInputSelection(
@@ -771,6 +766,7 @@ class VietnameseInputMethodService : InputMethodService(),
     }
 
     private fun cycleNextLanguage() {
+        finishCurrentWord()
         val settings = preferences.settings.value
         val enabledList = settings.enabledLanguages.toList()
         if (enabledList.isEmpty()) return
@@ -793,32 +789,32 @@ class VietnameseInputMethodService : InputMethodService(),
     }
 
     private fun moveCursorLeft() {
-        commitComposingWord()
+        finishCurrentWord()
         sendDownUpKeyEvents(KeyEvent.KEYCODE_DPAD_LEFT)
     }
 
     private fun moveCursorRight() {
-        commitComposingWord()
+        finishCurrentWord()
         sendDownUpKeyEvents(KeyEvent.KEYCODE_DPAD_RIGHT)
     }
 
     private fun moveCursorStart() {
-        commitComposingWord()
+        finishCurrentWord()
         sendDownUpKeyEvents(KeyEvent.KEYCODE_MOVE_HOME)
     }
 
     private fun moveCursorEnd() {
-        commitComposingWord()
+        finishCurrentWord()
         sendDownUpKeyEvents(KeyEvent.KEYCODE_MOVE_END)
     }
 
     private fun selectAll() {
-        commitComposingWord()
+        finishCurrentWord()
         currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
     }
 
     private fun paste() {
-        commitComposingWord()
+        finishCurrentWord()
         currentInputConnection?.performContextMenuAction(android.R.id.paste)
     }
 

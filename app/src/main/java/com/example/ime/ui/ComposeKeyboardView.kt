@@ -176,6 +176,7 @@ fun ComposeKeyboardView(
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
     onMoveCursorByTouchpad: (Int, Int) -> Unit,
+    onStartSpaceSwipe: () -> Unit,
     onMoveCursorStart: () -> Unit,
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
@@ -386,6 +387,7 @@ fun ComposeKeyboardView(
                         onMoveCursorLeft = onMoveCursorLeft,
                         onMoveCursorRight = onMoveCursorRight,
                         onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                        onStartSpaceSwipe = onStartSpaceSwipe,
                         onMoveCursorStart = onMoveCursorStart,
                         onMoveCursorEnd = onMoveCursorEnd,
                         onSelectAll = onSelectAll,
@@ -460,6 +462,7 @@ fun ComposeKeyboardView(
                 onMoveCursorLeft = onMoveCursorLeft,
                 onMoveCursorRight = onMoveCursorRight,
                 onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                onStartSpaceSwipe = onStartSpaceSwipe,
                 onMoveCursorStart = onMoveCursorStart,
                 onMoveCursorEnd = onMoveCursorEnd,
                 onSelectAll = onSelectAll,
@@ -516,6 +519,7 @@ private fun KeyboardContentWrapper(
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
     onMoveCursorByTouchpad: (Int, Int) -> Unit,
+    onStartSpaceSwipe: () -> Unit,
     onMoveCursorStart: () -> Unit,
     onMoveCursorEnd: () -> Unit,
     onSelectAll: () -> Unit,
@@ -593,6 +597,7 @@ private fun KeyboardContentWrapper(
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
                     onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                    onStartSpaceSwipe = onStartSpaceSwipe,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -663,6 +668,7 @@ private fun KeyboardContentWrapper(
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
                     onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                    onStartSpaceSwipe = onStartSpaceSwipe,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -716,6 +722,7 @@ private fun KeyboardContentWrapper(
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
                     onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                    onStartSpaceSwipe = onStartSpaceSwipe,
                     onCycleLanguage = {
                         triggerHaptic()
                         onCycleLanguage()
@@ -792,6 +799,7 @@ private fun KeyboardMainContent(
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
     onMoveCursorByTouchpad: (Int, Int) -> Unit,
+    onStartSpaceSwipe: () -> Unit,
     onCycleLanguage: () -> Unit,
     onToggleShift: () -> Unit,
     onSwitchLayout: (KeyboardLayoutMode) -> Unit,
@@ -923,7 +931,7 @@ private fun KeyboardMainContent(
                         if (settings.showEmojiKey) {
                             SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         }
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
 
                         // Center Gap with Quick Cursor Arrows in Split mode
                         Row(modifier = Modifier.weight(1.6f), horizontalArrangement = Arrangement.Center) {
@@ -932,7 +940,7 @@ private fun KeyboardMainContent(
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Phải", tint = colorScheme.secondaryTextColor, modifier = Modifier.size(20.dp).clickable { onMoveCursorRight() })
                         }
 
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = splitSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                         if (settings.showPeriodKey) {
                             KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 0.9f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
                         }
@@ -981,7 +989,7 @@ private fun KeyboardMainContent(
                         if (settings.showEmojiKey) {
                             SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                         }
-                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                        SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = alphaSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                         if (settings.showCommaKey) {
                             KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
                         }
@@ -1022,7 +1030,7 @@ private fun KeyboardMainContent(
                     if (settings.showEmojiKey) {
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                     }
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = symbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = symbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                     if (settings.showCommaKey) {
                         KeyCap(text = ",", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped(',') })
                     }
@@ -1059,7 +1067,7 @@ private fun KeyboardMainContent(
                     if (settings.showEmojiKey) {
                         SpecialKeyCap(icon = Icons.Default.EmojiEmotions, contentDescription = "Emoji", colorScheme = colorScheme, height = baseKeyHeight, weight = 1f, onClick = { onSwitchLayout(KeyboardLayoutMode.EMOJI) })
                     }
-                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = moreSymbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onCycleLanguage = onCycleLanguage)
+                    SpaceGestureKeyCap(settings = settings, colorScheme = colorScheme, height = baseKeyHeight, weight = moreSymbolSpaceWeight, onTap = onSpace, onMoveCursorByTouchpad = onMoveCursorByTouchpad, onStartSwipe = onStartSpaceSwipe, onCycleLanguage = onCycleLanguage)
                     if (settings.showPeriodKey) {
                         KeyCap(text = ".", colorScheme = colorScheme, height = baseKeyHeight, fontSize = (18 * fontScale).sp, weight = 1f, showPreview = settings.showKeyPreview, onClick = { onKeyTyped('.') })
                     }
@@ -1176,6 +1184,7 @@ private fun KeyboardMainContent(
                             weight = 5f,
                             onTap = onSpace,
                             onMoveCursorByTouchpad = onMoveCursorByTouchpad,
+                            onStartSwipe = onStartSpaceSwipe,
                             onCycleLanguage = onCycleLanguage
                         )
 
@@ -1663,6 +1672,7 @@ private fun RowScope.SpaceGestureKeyCap(
     weight: Float,
     onTap: () -> Unit,
     onMoveCursorByTouchpad: (Int, Int) -> Unit,
+    onStartSwipe: () -> Unit,
     onCycleLanguage: () -> Unit
 ) {
     val langPack = remember(settings.activeLanguageId) {
@@ -1735,12 +1745,18 @@ private fun RowScope.SpaceGestureKeyCap(
                                 lastY = change.position.y
                                 totalDragX += dragX
                                 totalDragY += dragY
-                                if (!hasExceededTouchSlop &&
+                                if (change.pressed &&
+                                    !hasExceededTouchSlop &&
                                     (abs(change.position.x - down.position.x) > touchSlop ||
                                         abs(change.position.y - down.position.y) > touchSlop)
                                 ) {
                                     hasExceededTouchSlop = true
                                     hasMovedCursorEarly = true
+                                    if (settings.swipeSpaceToMoveCursor &&
+                                        !isLongPressLanguageSwitch
+                                    ) {
+                                        onStartSwipe()
+                                    }
                                 }
 
                                 if (!change.pressed) {
