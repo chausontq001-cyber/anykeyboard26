@@ -447,10 +447,12 @@ class VietnameseInputMethodService : InputMethodService(),
         }
     }
 
-    private fun handleEmojiSelected(emoji: String) {
+    private fun handleEmojiSelected(emojiString: String) {
         val ic = currentInputConnection ?: return
         commitComposingWord()
-        commitTextAtCurrentSelection(ic, emoji)
+        telexEngine.reset()
+        refreshInputSelection(ic)
+        ic.commitText(emojiString, 1)
         updateSuggestions("")
     }
 

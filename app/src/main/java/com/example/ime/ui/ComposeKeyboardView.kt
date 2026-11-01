@@ -1122,7 +1122,7 @@ private fun KeyboardMainContent(
                             .height(baseKeyHeight * 3.4f)
                             .padding(vertical = 4.dp)
                     ) { page ->
-                        val emojis = if (page == 0) {
+                        val emojis: List<String> = if (page == 0) {
                             settings.recentEmojis
                         } else {
                             EmojiRepository.categories[page - 1].emojis
@@ -1134,13 +1134,13 @@ private fun KeyboardMainContent(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             items(
-                                count = emojis.size,
-                                key = { index -> "$page-${emojis[index]}-$index" }
-                            ) { index ->
-                                val emoji = emojis[index]
+                                items = emojis,
+                                key = { it }
+                            ) { emoji ->
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
+                                        .fillMaxWidth()
+                                        .height(40.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .clickable { onEmojiSelected(emoji) },
                                     contentAlignment = Alignment.Center
