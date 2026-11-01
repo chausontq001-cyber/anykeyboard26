@@ -99,20 +99,23 @@ object VietnameseCharUtils {
         } else {
             vowelIndices
         }
-        val cluster = clusterIndices.joinToString("") { text[it].lowercaseChar().toString() }
+        val cluster = clusterIndices.joinToString("") {
+            removeTone(text[it]).lowercaseChar().toString()
+        }
         val hasEndingConsonant = clusterIndices.last() < text.lastIndex
         val specializedIndex = cluster.indexOfFirst { it in "ăâêôơư" }
         val relativeIndex = when {
             specializedIndex >= 0 && cluster.contains("ươ") -> cluster.indexOf('ơ')
             specializedIndex >= 0 -> specializedIndex
-            cluster.startsWith("oa") || cluster.startsWith("oe") ||
-                cluster.startsWith("uy") -> when {
+            cluster.length == 2 &&
+                (cluster == "oa" || cluster == "oe" || cluster == "uy") -> when {
                 hasEndingConsonant -> 1
                 tonePlacement == TonePlacement.MODERN -> 0
                 else -> 1
             }
-            cluster.startsWith("ia") || cluster.startsWith("ya") ||
-                cluster.startsWith("ua") || cluster.startsWith("ưa") -> 0
+            cluster.length == 2 &&
+                (cluster == "ia" || cluster == "ya" ||
+                    cluster == "ua" || cluster == "ưa") -> 0
             cluster.length == 3 -> 1
             hasEndingConsonant && cluster.length >= 2 -> 1
             else -> 0
