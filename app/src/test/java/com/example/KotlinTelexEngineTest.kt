@@ -15,6 +15,8 @@ class KotlinTelexEngineTest {
         assertEquals("iê", type("iea"))
         assertEquals("uô", type("uoo"))
         assertEquals("aw", type("aww"))
+        assertEquals("ư", type("uw"))
+        assertEquals("ươ", type("uow"))
     }
 
     @Test
@@ -40,6 +42,32 @@ class KotlinTelexEngineTest {
         assertEquals("aw", engine.processKey("w"))
         assertTrue(engine.isReverted)
         assertEquals("aww", engine.processKey("w"))
+    }
+
+    @Test
+    fun repeatedVowelAndConsonantModifiersRevertAndLockSubsequentKeys() {
+        val cases = listOf(
+            "aaa" to "aa",
+            "eee" to "ee",
+            "ooo" to "oo",
+            "ddd" to "dd",
+            "uww" to "uw",
+            "duoww" to "duow"
+        )
+        cases.forEach { (input, expected) ->
+            val engine = KotlinTelexEngine()
+            assertEquals(input, expected, type(engine, input))
+            assertTrue("$input should enable the Telex lock", engine.isReverted)
+            assertEquals("$input should append keys literally after reverting", expected + "z", engine.processKey("z"))
+        }
+    }
+
+    @Test
+    fun revertedTelexModifierKeysAreAppendedLiterally() {
+        val engine = KotlinTelexEngine()
+        assertEquals("deodd", type(engine, "deoddd"))
+        assertTrue(engine.isReverted)
+        assertEquals("deoddd", engine.processKey("d"))
     }
 
     @Test

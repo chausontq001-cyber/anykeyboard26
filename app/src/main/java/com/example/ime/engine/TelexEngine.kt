@@ -75,6 +75,7 @@ open class TelexEngine : AutoCloseable {
             'x' -> applyTone(char, 4)
             'j' -> applyTone(char, 5)
             'a', 'e', 'o', 'w' -> applyVowelModifier(char, lower)
+            'u' -> buffer.append(char)
             'd' -> applyDModifier(char)
             else -> buffer.append(char)
         }

@@ -75,7 +75,7 @@ class VietnameseEngineTest {
 
         engine.reset()
         "aww".forEach { engine.processChar(it) }
-        assertEquals("aww", engine.composedWord)
+        assertEquals("aw", engine.composedWord)
 
         engine.reset()
         "aas".forEach { engine.processChar(it) }
