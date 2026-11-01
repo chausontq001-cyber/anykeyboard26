@@ -131,10 +131,9 @@ class VietnameseEngineTest {
         assertTrue(!VietnameseDictionary.getSuggestions("dc", null).contains("được"))
     }
 
-    private class FakeTelexEngine : TelexEngine {
+    private class FakeTelexEngine : TelexEngine() {
         private val buffer = StringBuilder()
-        var tonePlacement = TonePlacement.MODERN
-            private set
+        override var tonePlacement = TonePlacement.MODERN
 
         override fun configure(tonePlacement: TonePlacement) {
             this.tonePlacement = tonePlacement

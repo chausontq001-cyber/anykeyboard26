@@ -35,9 +35,10 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.MainActivity
 import com.example.ime.CursorMovement
 import com.example.ime.NavigationBarPolicy
-import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.VietnameseCharUtils
+import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.VietnameseEngine
+import com.example.ime.engine.TelexEngine
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
@@ -64,6 +65,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private lateinit var preferences: KeyboardPreferences
     private lateinit var engine: VietnameseEngine
+    private val telexEngine = TelexEngine()
 
     private var composingWordState by mutableStateOf("")
     private var suggestionsState by mutableStateOf<List<String>>(emptyList())
@@ -105,6 +107,10 @@ class VietnameseInputMethodService : InputMethodService(),
                 } else {
                     TonePlacement.MODERN
                 }
+            )
+            telexEngine.configure(
+                if (initialSettings.tonePlacementEnabled) initialSettings.tonePlacement
+                else TonePlacement.MODERN
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing preferences/engine", e)
@@ -151,6 +157,9 @@ class VietnameseInputMethodService : InputMethodService(),
                 s.typingMethod,
                 if (s.tonePlacementEnabled) s.tonePlacement else TonePlacement.MODERN
             )
+            telexEngine.configure(
+                if (s.tonePlacementEnabled) s.tonePlacement else TonePlacement.MODERN
+            )
         }
 
         val composeView = ComposeView(this).apply {
@@ -176,6 +185,7 @@ class VietnameseInputMethodService : InputMethodService(),
                     } else {
                         TonePlacement.MODERN
                     }
+                    telexEngine.configure(engine.tonePlacement)
 
                     ComposeKeyboardView(
                         settings = settings,
@@ -321,7 +331,7 @@ class VietnameseInputMethodService : InputMethodService(),
             candidatesEnd
         )
         updateAutoCapitalizationFromCursor(currentInputEditorInfo)
-        if (!::engine.isInitialized || !engine.isWordActive()) return
+        if (!::engine.isInitialized || !isComposingActive()) return
 
         if (candidatesStart < 0 ||
             candidatesEnd < candidatesStart ||
@@ -353,41 +363,15 @@ class VietnameseInputMethodService : InputMethodService(),
         if (::engine.isInitialized) {
             engine.close()
         }
+        telexEngine.close()
         super.onDestroy()
     }
 
     private fun handleKeyTyped(c: Char) {
         val ic = currentInputConnection ?: return
-
-        if (engine.typingMethod == TypingMethod.TELEX && !engine.isWordActive() && c.isLetter()) {
-            val textBeforeCursor = ic.getTextBeforeCursor(MAX_TELEX_WORD_LENGTH, 0)
-                ?.toString()
-                .orEmpty()
-            val previousWord = textBeforeCursor.takeLastWhile(Char::isLetter)
-            if (previousWord.isNotEmpty()) {
-                val extracted = getExtractedText(ic)
-                if (extracted != null &&
-                    extracted.selectionStart >= 0 &&
-                    extracted.selectionStart == extracted.selectionEnd
-                ) {
-                    val cursor = extracted.startOffset + extracted.selectionEnd
-                    engine.reset()
-                    VietnameseCharUtils.toTelexSequence(previousWord).forEach(engine::processChar)
-                    val result = engine.processChar(c)
-                    if (result is VietnameseEngine.ProcessResult.Composing &&
-                        ic.setSelection(cursor - previousWord.length, cursor)
-                    ) {
-                        composingWordState = result.text
-                        ic.setComposingText(result.text, 1)
-                        updateSuggestions(result.text)
-                        return
-                    }
-                    if (result is VietnameseEngine.ProcessResult.Composing) {
-                        Log.w(TAG, "Input connection rejected selection for Telex recomposition")
-                    }
-                    engine.reset()
-                }
-            }
+        if (engine.typingMethod == TypingMethod.TELEX) {
+            handleTelexKeyTyped(c, ic)
+            return
         }
 
         when (val result = engine.processChar(c)) {
@@ -410,6 +394,56 @@ class VietnameseInputMethodService : InputMethodService(),
                 commitTextAtCurrentSelection(ic, c.toString())
                 resetComposing()
             }
+        }
+    }
+
+    private fun handleTelexKeyTyped(
+        c: Char,
+        ic: android.view.inputmethod.InputConnection
+    ) {
+        if (!telexEngine.hasInput && c.isLetter()) {
+            val textBeforeCursor = ic.getTextBeforeCursor(MAX_TELEX_WORD_LENGTH, 0)
+                ?.toString()
+                .orEmpty()
+            val previousWord = textBeforeCursor.takeLastWhile(Char::isLetter)
+            if (previousWord.isNotEmpty()) {
+                val extracted = getExtractedText(ic)
+                if (extracted != null &&
+                    extracted.selectionStart >= 0 &&
+                    extracted.selectionStart == extracted.selectionEnd
+                ) {
+                    val cursor = extracted.startOffset + extracted.selectionEnd
+                    telexEngine.reset()
+                    VietnameseCharUtils.toTelexSequence(previousWord).forEach {
+                        telexEngine.processKey(it.toString())
+                    }
+                    val result = telexEngine.processKey(c.toString())
+                    if (ic.setSelection(cursor - previousWord.length, cursor)) {
+                        composingWordState = result
+                        ic.setComposingText(result, 1)
+                        updateSuggestions(result)
+                        return
+                    }
+                    Log.w(TAG, "Input connection rejected selection for Telex recomposition")
+                    telexEngine.reset()
+                }
+            }
+        }
+
+        if (c.isLetter()) {
+            val result = telexEngine.processKey(c.toString())
+            composingWordState = result
+            refreshInputSelection(ic)
+            ic.setComposingText(result, 1)
+            updateSuggestions(result)
+        } else {
+            if (telexEngine.hasInput) {
+                val finalWord = telexEngine.composingText
+                commitTextAtCurrentSelection(ic, finalWord)
+                lastCommittedWord = finalWord
+            }
+            commitTextAtCurrentSelection(ic, c.toString())
+            resetComposing()
         }
     }
 
@@ -453,16 +487,25 @@ class VietnameseInputMethodService : InputMethodService(),
 
         refreshInputSelection(ic)
 
-        if (engine.isWordActive()) {
-            val handled = engine.processBackspace()
+        if (isComposingActive()) {
+            val handled = if (engine.typingMethod == TypingMethod.TELEX) {
+                telexEngine.hasInput
+            } else {
+                engine.processBackspace()
+            }
             if (handled) {
-                composingWordState = engine.composedWord
-                if (engine.composedWord.isEmpty()) {
+                val composed = currentComposedWord()
+                if (engine.typingMethod == TypingMethod.TELEX) {
+                    composingWordState = telexEngine.backspace()
+                } else {
+                    composingWordState = composed
+                }
+                if (composingWordState.isEmpty()) {
                     ic.commitText("", 1)
                     resetComposing()
                 } else {
-                    ic.setComposingText(engine.composedWord, 1)
-                    updateSuggestions(engine.composedWord)
+                    ic.setComposingText(composingWordState, 1)
+                    updateSuggestions(composingWordState)
                 }
             } else {
                 resetComposing()
@@ -603,21 +646,26 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleSpace() {
         val ic = currentInputConnection ?: return
-        if (engine.isWordActive()) {
-            val finalWord = engine.composedWord
+        if (isComposingActive()) {
+            val finalWord = currentComposedWord()
             commitTextAtCurrentSelection(ic, "$finalWord ")
             lastCommittedWord = finalWord
             resetComposing()
         } else {
             commitTextAtCurrentSelection(ic, " ")
+            if (engine.typingMethod == TypingMethod.TELEX) {
+                telexEngine.reset()
+            }
             updateSuggestions("")
         }
     }
 
     private fun handleEnter() {
         val ic = currentInputConnection ?: return
-        if (engine.isWordActive()) {
+        if (isComposingActive()) {
             commitComposingWord()
+        } else if (engine.typingMethod == TypingMethod.TELEX) {
+            telexEngine.reset()
         }
         val info = currentInputEditorInfo
         val isMulti = info?.let { (it.inputType and android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0 } ?: false
@@ -642,8 +690,8 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun commitComposingWord() {
         val ic = currentInputConnection ?: return
-        if (engine.isWordActive()) {
-            val word = engine.composedWord
+        if (isComposingActive()) {
+            val word = currentComposedWord()
             commitTextAtCurrentSelection(ic, word)
             lastCommittedWord = word
             resetComposing()
@@ -683,6 +731,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun resetComposing() {
         engine.reset()
+        telexEngine.reset()
         composingWordState = ""
         val settings = preferences.settings.value
         if (!settings.showSuggestions || !settings.smartFeaturesEnabled) {
@@ -692,6 +741,14 @@ class VietnameseInputMethodService : InputMethodService(),
             updateSuggestions("")
         }
     }
+
+    private fun isComposingActive(): Boolean =
+        if (engine.typingMethod == TypingMethod.TELEX) telexEngine.hasInput
+        else engine.isWordActive()
+
+    private fun currentComposedWord(): String =
+        if (engine.typingMethod == TypingMethod.TELEX) telexEngine.composingText
+        else engine.composedWord
 
     private fun updateSuggestions(currentWord: String) {
         if (!suggestionsEnabled()) {

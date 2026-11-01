@@ -3,7 +3,7 @@ package com.example.ime.engine
 import app.funput.funput.ime.nativebridge.FunputNative
 import com.example.ime.model.TonePlacement
 
-internal class FunputTelexEngine : TelexEngine {
+internal class FunputTelexEngine : TelexEngine() {
     private var handle = FunputNative.nativeCreate().also {
         check(it != InvalidHandle) { "Unable to create Funput native engine" }
     }
@@ -25,10 +25,18 @@ internal class FunputTelexEngine : TelexEngine {
     override fun process(codePoint: Int): String =
         withHandle { FunputNative.nativeProcess(it, codePoint) }
 
+    override fun processKey(key: String): String {
+        var result = ""
+        key.forEach { result = process(it.code) }
+        return result
+    }
+
     override fun backspace(): String =
         withHandle(FunputNative::nativeBackspace)
 
     override fun clear() = withHandle(FunputNative::nativeClear)
+
+    override fun reset() = clear()
 
     override fun close() {
         if (handle == InvalidHandle) return
