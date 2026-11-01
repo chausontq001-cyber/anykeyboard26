@@ -12,6 +12,7 @@ class VietnameseEngine(
         set(value) {
             if (field == value) return
             field = value
+            vniHistory.clear()
             recompose()
         }
 
@@ -26,6 +27,7 @@ class VietnameseEngine(
     // Current word buffer holding raw typed characters
     private var rawBuffer = StringBuilder()
     private var telexEngine: TelexEngine? = null
+    private val vniHistory = mutableListOf<VniState>()
 
     // Composed word displayed to the user
     var composedWord: String = ""
@@ -40,6 +42,7 @@ class VietnameseEngine(
 
     fun reset() {
         rawBuffer.clear()
+        vniHistory.clear()
         composedWord = ""
         currentTone = 0
         lastKeyWasTone = null
@@ -74,7 +77,12 @@ class VietnameseEngine(
         if (typingMethod == TypingMethod.TELEX) {
             return processTelex(c)
         } else if (typingMethod == TypingMethod.VNI) {
-            return processVni(c)
+            val previousState = snapshotVniState()
+            val result = processVni(c)
+            if (result is ProcessResult.Composing) {
+                vniHistory += previousState
+            }
+            return result
         }
 
         return ProcessResult.Unhandled(c)
@@ -88,6 +96,17 @@ class VietnameseEngine(
         if (rawBuffer.isEmpty()) {
             return false
         }
+        if (typingMethod == TypingMethod.VNI) {
+            val previousState = vniHistory.removeLastOrNull() ?: return false
+            rawBuffer.setLength(0)
+            rawBuffer.append(previousState.rawText)
+            currentTone = previousState.tone
+            lastKeyWasTone = previousState.lastToneKey
+            lastKeyWasModifier = previousState.lastModifierKey
+            recompose()
+            return true
+        }
+
         rawBuffer.deleteCharAt(rawBuffer.length - 1)
         composedWord = if (typingMethod == TypingMethod.TELEX) {
             getTelexEngine().backspace()
@@ -97,6 +116,13 @@ class VietnameseEngine(
         }
         return true
     }
+
+    private fun snapshotVniState() = VniState(
+        rawText = rawBuffer.toString(),
+        tone = currentTone,
+        lastToneKey = lastKeyWasTone,
+        lastModifierKey = lastKeyWasModifier
+    )
 
     private fun processTelex(c: Char): ProcessResult {
         rawBuffer.append(c)
@@ -254,4 +280,11 @@ class VietnameseEngine(
         data class WordBoundary(val committedWord: String, val boundaryChar: Char) : ProcessResult()
         data class Unhandled(val char: Char) : ProcessResult()
     }
+
+    private data class VniState(
+        val rawText: String,
+        val tone: Int,
+        val lastToneKey: Char?,
+        val lastModifierKey: Char?
+    )
 }

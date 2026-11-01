@@ -474,26 +474,39 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private fun handleBackspace() {
         val ic = currentInputConnection ?: return
-        finishCurrentWord(ic)
-
-        // YÊU CẦU 4: Nếu đang có văn bản được bôi đen/chọn, xóa ngay lập tức và thoát
-        val selectedText = ic.getSelectedText(0)
-        val extracted = getExtractedText(ic)
-        val isTextSelected = (!selectedText.isNullOrEmpty()) ||
-            (extracted != null &&
-                extracted.selectionStart >= 0 &&
-                extracted.selectionEnd >= 0 &&
-                extracted.selectionStart != extracted.selectionEnd)
-
-        if (isTextSelected) {
+        if (hasActiveSelection()) {
+            finishCurrentWord(ic)
             resetComposing()
             sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
             updateSuggestions("")
             return
         }
 
+        if (isComposingActive()) {
+            val updatedWord = if (engine.typingMethod == TypingMethod.TELEX) {
+                telexEngine.backspace()
+            } else {
+                engine.processBackspace()
+                engine.composedWord
+            }
+
+            if (updatedWord.isEmpty()) {
+                ic.setComposingText("", 1)
+                ic.finishComposingText()
+                resetComposing()
+            } else {
+                composingWordState = updatedWord
+                ic.setComposingText(updatedWord, 1)
+                updateSuggestions(updatedWord)
+            }
+            return
+        }
+
         refreshInputSelection(ic)
-        ic.deleteSurroundingText(1, 0)
+        if (!ic.deleteSurroundingTextInCodePoints(1, 0)) {
+            Log.w(TAG, "Input connection rejected code-point delete; using UTF-16 fallback")
+            ic.deleteSurroundingText(1, 0)
+        }
         updateSuggestions("")
     }
 
@@ -775,14 +788,9 @@ class VietnameseInputMethodService : InputMethodService(),
         val nextLangId = enabledList[nextIndex]
 
         preferences.updateSettings {
-            val typingMethod = when (nextLangId) {
-                "vi_telex" -> TypingMethod.TELEX
-                "vi_vni" -> TypingMethod.VNI
-                else -> TypingMethod.OFF
-            }
             it.copy(
                 activeLanguageId = nextLangId,
-                typingMethod = typingMethod
+                typingMethod = WorldLanguagesRepository.typingMethodFor(nextLangId)
             )
         }
 

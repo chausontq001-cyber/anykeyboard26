@@ -2,6 +2,8 @@ package com.example.ime.model
 
 object WorldLanguagesRepository {
 
+    val supportedLanguageIds: Set<String> = setOf("vi_telex", "vi_vni", "en_us")
+
     val allLanguages: List<LanguagePack> = listOf(
         LanguagePack(
             id = "vi_telex",
@@ -183,5 +185,14 @@ object WorldLanguagesRepository {
 
     fun getLanguage(id: String): LanguagePack? {
         return allLanguages.find { it.id == id }
+    }
+
+    fun isSupported(languageId: String): Boolean =
+        languageId in supportedLanguageIds
+
+    fun typingMethodFor(languageId: String): TypingMethod = when (languageId) {
+        "vi_telex" -> TypingMethod.TELEX
+        "vi_vni" -> TypingMethod.VNI
+        else -> TypingMethod.OFF
     }
 }

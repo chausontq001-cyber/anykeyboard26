@@ -120,10 +120,23 @@ class KeyboardPreferences(context: Context) {
     }
 
     private fun loadSettings(): KeyboardSettings {
+        val typingMethod = TypingMethod.valueOf(
+            prefs.getString(KEY_TYPING_METHOD, TypingMethod.TELEX.name) ?: TypingMethod.TELEX.name
+        )
+        val enabledLanguages = (prefs.getStringSet(KEY_ENABLED_LANGS, setOf("vi_telex", "en_us"))
+            ?: setOf("vi_telex", "en_us"))
+            .filterTo(mutableSetOf()) { WorldLanguagesRepository.isSupported(it) }
+            .ifEmpty { mutableSetOf("vi_telex") }
+        val savedActiveLanguage = prefs.getString(KEY_ACTIVE_LANG, "vi_telex") ?: "vi_telex"
+        val activeLanguage = savedActiveLanguage.takeIf { it in enabledLanguages }
+            ?: enabledLanguages.first()
+
         return KeyboardSettings(
-            typingMethod = TypingMethod.valueOf(
-                prefs.getString(KEY_TYPING_METHOD, TypingMethod.TELEX.name) ?: TypingMethod.TELEX.name
-            ),
+            typingMethod = if (activeLanguage == savedActiveLanguage) {
+                typingMethod
+            } else {
+                WorldLanguagesRepository.typingMethodFor(activeLanguage)
+            },
             tonePlacement = TonePlacement.valueOf(
                 prefs.getString(KEY_TONE_PLACEMENT, TonePlacement.MODERN.name) ?: TonePlacement.MODERN.name
             ),
@@ -160,11 +173,9 @@ class KeyboardPreferences(context: Context) {
             swipeSpaceToMoveCursor = prefs.getBoolean(KEY_SWIPE_SPACE_CURSOR, true),
             holdSpaceToSwitchLanguage = prefs.getBoolean(KEY_HOLD_SPACE_LANG, true),
             swipeBackspaceToDeleteFast = prefs.getBoolean(KEY_SWIPE_BACKSPACE_DELETE, true),
-            activeLanguageId = prefs.getString(KEY_ACTIVE_LANG, "vi_telex") ?: "vi_telex",
-            downloadedLanguages = prefs.getStringSet(KEY_DOWNLOADED_LANGS, setOf("vi_telex", "vi_vni", "en_us"))
-                ?: setOf("vi_telex", "vi_vni", "en_us"),
-            enabledLanguages = prefs.getStringSet(KEY_ENABLED_LANGS, setOf("vi_telex", "en_us"))
-                ?: setOf("vi_telex", "en_us"),
+            activeLanguageId = activeLanguage,
+            downloadedLanguages = WorldLanguagesRepository.supportedLanguageIds,
+            enabledLanguages = enabledLanguages,
             displayStyle = KeyboardDisplayStyle.valueOf(
                 prefs.getString(KEY_DISPLAY_STYLE, KeyboardDisplayStyle.DOCKED.name) ?: KeyboardDisplayStyle.DOCKED.name
             ),

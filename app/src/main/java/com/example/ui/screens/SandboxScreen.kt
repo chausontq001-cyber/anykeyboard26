@@ -73,7 +73,7 @@ import com.example.ime.model.KeyboardAlignment
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.KeyboardSettings
 import com.example.ime.model.TonePlacement
-import com.example.ime.model.TypingMethod
+import com.example.ime.model.WorldLanguagesRepository
 import com.example.ime.ui.ComposeKeyboardView
 import kotlin.math.abs
 
@@ -270,11 +270,7 @@ fun SandboxScreen(
         val currentIndex = enabledList.indexOf(settings.activeLanguageId)
         val nextIndex = (currentIndex + 1) % enabledList.size
         val nextLangId = enabledList[nextIndex]
-        val typingMethod = when (nextLangId) {
-            "vi_telex" -> TypingMethod.TELEX
-            "vi_vni" -> TypingMethod.VNI
-            else -> TypingMethod.OFF
-        }
+        val typingMethod = WorldLanguagesRepository.typingMethodFor(nextLangId)
         preferences.updateSettings {
             it.copy(activeLanguageId = nextLangId, typingMethod = typingMethod)
         }

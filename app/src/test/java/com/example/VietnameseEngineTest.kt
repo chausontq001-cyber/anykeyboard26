@@ -7,7 +7,9 @@ import com.example.ime.engine.VietnameseCharUtils
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
 import com.example.ime.model.KeyboardSettings
+import com.example.ime.model.WorldLanguagesRepository
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,6 +56,29 @@ class VietnameseEngineTest {
         // Type 'd', '9', 'u', 'o', '7', 'n', 'g', '2' -> 'đường'
         "d9uo7ng2".forEach { engine.processChar(it) }
         assertEquals("đường", engine.composedWord)
+    }
+
+    @Test
+    fun vniBackspaceRestoresToneAndModifierStateOneKeyAtATime() {
+        val engine = VietnameseEngine(typingMethod = TypingMethod.VNI)
+
+        "toan1".forEach { engine.processChar(it) }
+        assertEquals("toán", engine.composedWord)
+
+        assertTrue(engine.processBackspace())
+        assertEquals("toan", engine.composedWord)
+
+        engine.processChar('2')
+        assertEquals("toàn", engine.composedWord)
+
+        engine.reset()
+        "vie6t5".forEach { engine.processChar(it) }
+        assertEquals("việt", engine.composedWord)
+
+        assertTrue(engine.processBackspace())
+        assertEquals("viêt", engine.composedWord)
+
+        engine.close()
     }
 
     @Test
@@ -158,6 +183,15 @@ class VietnameseEngineTest {
         assertTrue(!settings.navBarShowLineJump)
         assertTrue(!settings.navBarShowSelectAll)
         assertTrue(!settings.navBarShowPaste)
+    }
+
+    @Test
+    fun onlyLanguagesWithAnIntegratedKeyboardEngineAreSupported() {
+        assertTrue(WorldLanguagesRepository.isSupported("vi_telex"))
+        assertTrue(WorldLanguagesRepository.isSupported("vi_vni"))
+        assertTrue(WorldLanguagesRepository.isSupported("en_us"))
+        assertFalse(WorldLanguagesRepository.isSupported("fr_fr"))
+        assertFalse(WorldLanguagesRepository.isSupported("ja_jp"))
     }
 
     @Test

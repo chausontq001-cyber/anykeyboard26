@@ -27,22 +27,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -51,7 +45,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,9 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.LanguagePack
-import com.example.ime.model.TypingMethod
 import com.example.ime.model.WorldLanguagesRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -82,9 +73,6 @@ fun LanguagesScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var expandedGroupId by remember { mutableStateOf<String?>("group_active_lang") }
-
-    // Download progress map
-    val downloadingProgress = remember { mutableStateMapOf<String, Float>() }
 
     fun toggleGroup(groupId: String, index: Int) {
         val willOpen = expandedGroupId != groupId
@@ -137,7 +125,9 @@ fun LanguagesScreen(
 
                             Text("Chọn ngôn ngữ đang gõ:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
 
-                            settings.enabledLanguages.forEach { langId ->
+                            settings.enabledLanguages
+                                .filter { WorldLanguagesRepository.isSupported(it) }
+                                .forEach { langId ->
                                 val pack = WorldLanguagesRepository.getLanguage(langId)
                                 if (pack != null) {
                                     val isCurrent = settings.activeLanguageId == langId
@@ -156,12 +146,10 @@ fun LanguagesScreen(
                                             )
                                             .clickable {
                                                 preferences.updateSettings {
-                                                    val method = when (langId) {
-                                                        "vi_telex" -> TypingMethod.TELEX
-                                                        "vi_vni" -> TypingMethod.VNI
-                                                        else -> TypingMethod.OFF
-                                                    }
-                                                    it.copy(activeLanguageId = langId, typingMethod = method)
+                                                    it.copy(
+                                                        activeLanguageId = langId,
+                                                        typingMethod = WorldLanguagesRepository.typingMethodFor(langId)
+                                                    )
                                                 }
                                                 Toast.makeText(context, "Đã chọn ${pack.name}", Toast.LENGTH_SHORT).show()
                                             }
@@ -213,7 +201,7 @@ fun LanguagesScreen(
                 Column {
                     LanguageAccordionHeader(
                         title = "Ngôn ngữ đã kích hoạt",
-                        subtitle = "Bật/tắt ngôn ngữ trong danh sách đổi nhanh bằng phím cách",
+                        subtitle = "Bật/tắt bộ gõ tích hợp trong danh sách đổi bằng phím cách",
                         icon = Icons.Default.Language,
                         isExpanded = isExpanded,
                         onClick = { toggleGroup("group_installed_lang", 1) }
@@ -232,9 +220,11 @@ fun LanguagesScreen(
                         ) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                            Text("Các gói đã tải về máy:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Các bộ gõ có sẵn trong ứng dụng:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
 
-                            settings.downloadedLanguages.forEach { langId ->
+                            settings.downloadedLanguages
+                                .filter { WorldLanguagesRepository.isSupported(it) }
+                                .forEach { langId ->
                                 val pack = WorldLanguagesRepository.getLanguage(langId)
                                 if (pack != null) {
                                     val isEnabled = settings.enabledLanguages.contains(langId)
@@ -264,47 +254,33 @@ fun LanguagesScreen(
                                                 checked = isEnabled,
                                                 onCheckedChange = { checked ->
                                                     val newSet = settings.enabledLanguages.toMutableSet()
+                                                    var fallbackLanguageId: String? = null
                                                     if (checked) {
                                                         newSet.add(langId)
                                                     } else {
                                                         if (newSet.size > 1) {
                                                             newSet.remove(langId)
                                                             if (settings.activeLanguageId == langId) {
-                                                                val fallback = newSet.first()
-                                                                preferences.updateSettings { it.copy(activeLanguageId = fallback) }
+                                                                fallbackLanguageId = newSet.first()
                                                             }
                                                         } else {
                                                             Toast.makeText(context, "Phải giữ ít nhất 1 ngôn ngữ", Toast.LENGTH_SHORT).show()
                                                             return@Switch
                                                         }
                                                     }
-                                                    preferences.updateSettings { it.copy(enabledLanguages = newSet) }
+                                                    preferences.updateSettings { current ->
+                                                        current.copy(
+                                                            enabledLanguages = newSet,
+                                                            activeLanguageId = fallbackLanguageId
+                                                                ?: current.activeLanguageId,
+                                                            typingMethod = fallbackLanguageId?.let { languageId ->
+                                                                WorldLanguagesRepository.typingMethodFor(languageId)
+                                                            } ?: current.typingMethod
+                                                        )
+                                                    }
                                                 }
                                             )
 
-                                            if (langId != "vi_telex" && langId != "en_us") {
-                                                IconButton(
-                                                    onClick = {
-                                                        val newDownloaded = settings.downloadedLanguages.toMutableSet().apply { remove(langId) }
-                                                        val newEnabled = settings.enabledLanguages.toMutableSet().apply { remove(langId) }
-                                                        preferences.updateSettings {
-                                                            it.copy(
-                                                                downloadedLanguages = newDownloaded,
-                                                                enabledLanguages = if (newEnabled.isEmpty()) setOf("vi_telex") else newEnabled,
-                                                                activeLanguageId = if (it.activeLanguageId == langId) "vi_telex" else it.activeLanguageId
-                                                            )
-                                                        }
-                                                        Toast.makeText(context, "Đã xóa ${pack.name}", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Delete,
-                                                        contentDescription = "Xóa",
-                                                        tint = MaterialTheme.colorScheme.error,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            }
                                         }
                                     }
                                 }
@@ -328,7 +304,7 @@ fun LanguagesScreen(
                 Column {
                     LanguageAccordionHeader(
                         title = "Kho ngôn ngữ thế giới",
-                        subtitle = "Tải xuống các gói ngôn ngữ và phương thức nhập toàn cầu",
+                        subtitle = "Các bộ gõ tích hợp sẵn và những ngôn ngữ chưa được hỗ trợ",
                         icon = Icons.Default.Public,
                         isExpanded = isExpanded,
                         onClick = { toggleGroup("group_world_store", 2) }
@@ -348,8 +324,8 @@ fun LanguagesScreen(
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                             WorldLanguagesRepository.allLanguages.forEach { pack ->
+                                val isSupported = WorldLanguagesRepository.isSupported(pack.id)
                                 val isDownloaded = settings.downloadedLanguages.contains(pack.id)
-                                val progress = downloadingProgress[pack.id]
 
                                 Row(
                                     modifier = Modifier
@@ -368,19 +344,21 @@ fun LanguagesScreen(
                                         Text(pack.flag, fontSize = 22.sp)
                                         Column {
                                             Text(pack.name, fontWeight = FontWeight.Bold)
-                                            Text("${pack.nativeName} • ${pack.sizeMb}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(
+                                                "${pack.nativeName} • ${pack.inputMethod}",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
 
-                                    if (progress != null) {
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            CircularProgressIndicator(
-                                                progress = { progress },
-                                                modifier = Modifier.size(24.dp),
-                                                strokeWidth = 2.dp
-                                            )
-                                            Text("${(progress * 100).toInt()}%", fontSize = 10.sp)
-                                        }
+                                    if (!isSupported) {
+                                        Text(
+                                            "Chưa hỗ trợ",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     } else if (isDownloaded) {
                                         Box(
                                             modifier = Modifier
@@ -388,35 +366,29 @@ fun LanguagesScreen(
                                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                                         ) {
-                                            Text("Đã tải", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                "Có sẵn",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         }
                                     } else {
                                         FilledTonalButton(
                                             onClick = {
-                                                scope.launch {
-                                                    downloadingProgress[pack.id] = 0.1f
-                                                    delay(250)
-                                                    downloadingProgress[pack.id] = 0.5f
-                                                    delay(250)
-                                                    downloadingProgress[pack.id] = 0.9f
-                                                    delay(200)
-                                                    downloadingProgress.remove(pack.id)
-                                                    val newDownloaded = settings.downloadedLanguages + pack.id
-                                                    val newEnabled = settings.enabledLanguages + pack.id
-                                                    preferences.updateSettings {
-                                                        it.copy(
-                                                            downloadedLanguages = newDownloaded,
-                                                            enabledLanguages = newEnabled
-                                                        )
-                                                    }
-                                                    Toast.makeText(context, "Đã tải xong ${pack.name}", Toast.LENGTH_SHORT).show()
+                                                preferences.updateSettings {
+                                                    it.copy(
+                                                        downloadedLanguages = it.downloadedLanguages + pack.id,
+                                                        enabledLanguages = it.enabledLanguages + pack.id
+                                                    )
                                                 }
+                                                Toast.makeText(context, "Đã bật ${pack.name}", Toast.LENGTH_SHORT).show()
                                             },
                                             modifier = Modifier.height(34.dp)
                                         ) {
                                             Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Tải", fontSize = 12.sp)
+                                            Text("Bật", fontSize = 12.sp)
                                         }
                                     }
                                 }
