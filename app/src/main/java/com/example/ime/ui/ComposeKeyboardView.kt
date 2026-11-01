@@ -5,9 +5,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -22,6 +19,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,6 +75,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -86,10 +85,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -1207,19 +1204,7 @@ private fun RowScope.KeyCap(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    var isPointerDown by remember { mutableStateOf(false) }
-
-    // Glassmorphism Popup Animation (YÊU CẦU 1): Scale từ 0.8 lên 1.0 kèm fade-in
-    val popupScale by animateFloatAsState(
-        targetValue = if (isPressed || isPointerDown) 1f else 0.8f,
-        animationSpec = spring(dampingRatio = 0.68f, stiffness = 850f),
-        label = "glassPopupScale"
-    )
-    val popupAlpha by animateFloatAsState(
-        targetValue = if (isPressed || isPointerDown) 1f else 0f,
-        animationSpec = tween(durationMillis = 100),
-        label = "glassPopupAlpha"
-    )
+    val pointerDownState = remember { mutableStateOf(false) }
 
     // Hiệu ứng phím Glassmorphism khi bấm (YÊU CẦU 2)
     val baseKeyColor = if (isSpecial) colorScheme.specialKeyColor else colorScheme.keyBackgroundColor
@@ -1235,7 +1220,7 @@ private fun RowScope.KeyCap(
         modifier = Modifier
             .weight(weight)
             .height(height)
-            .zIndex(if (isPressed || popupAlpha > 0.01f) 100f else 0f),
+            .zIndex(if (isPressed) 100f else 0f),
         contentAlignment = Alignment.Center
     ) {
         // Khối phím bấm
@@ -1257,7 +1242,7 @@ private fun RowScope.KeyCap(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        isPointerDown = true
+                        pointerDownState.value = true
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -1265,7 +1250,7 @@ private fun RowScope.KeyCap(
                                 if (!change.pressed) break
                             }
                         } finally {
-                            isPointerDown = false
+                            pointerDownState.value = false
                         }
                     }
                 }
@@ -1326,87 +1311,90 @@ private fun RowScope.KeyCap(
             )
         }
 
-        // The preview is visual-only and does not add a pointer input target.
-        if (showPreview && (isPressed || isPointerDown || popupAlpha > 0.05f) && !isSpecial) {
-            Popup(
-                alignment = Alignment.Center,
-                offset = IntOffset(0, with(LocalDensity.current) { (-64).dp.toPx().roundToInt() }),
-                properties = PopupProperties(clippingEnabled = false, focusable = false)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 56.dp, height = 56.dp)
-                        .scale(popupScale)
-                        .alpha(popupAlpha)
-                        .shadow(
-                            elevation = 14.dp,
-                            shape = popupBubbleShape,
-                            ambientColor = Color.Black.copy(alpha = 0.50f),
-                            spotColor = Color.Black.copy(alpha = 0.65f)
-                        )
-                        .clip(popupBubbleShape)
-                        .background(
-                            brush = if (colorScheme.isDark) {
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.25f), // Mặt kính sáng trên cùng
-                                        Color(0xFF262C3A).copy(alpha = 0.65f), // Kính mờ thân popup
-                                        Color(0xFF141720).copy(alpha = 0.90f)  // Đáy kính đậm
-                                    )
-                                )
-                            } else {
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.95f),
-                                        Color(0xFFF0F3F8).copy(alpha = 0.70f),
-                                        Color(0xFFD6DBE4).copy(alpha = 0.88f)
-                                    )
-                                )
-                            }
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
-                            shape = popupBubbleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Vệt phản quang mặt kính mép trên của popup
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.75f)
-                            .height(1.5.dp)
-                            .align(Alignment.TopCenter)
-                            .padding(top = 2.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        Color.White.copy(alpha = if (colorScheme.isDark) 0.70f else 0.90f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
+        if (showPreview && !isSpecial) {
+            KeyPreviewBubble(
+                visibleState = pointerDownState,
+                text = text,
+                colorScheme = colorScheme,
+                shape = popupBubbleShape
+            )
+        }
+    }
+}
 
-                    // KÝ TỰ PHÍM: Lớp trên cùng, độ tương phản cao tuyệt đối, không bị blur
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = text,
-                            color = if (colorScheme.isDark) Color(0xFFFFFFFF) else Color(0xFF12151B),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
+@Composable
+private fun BoxScope.KeyPreviewBubble(
+    visibleState: State<Boolean>,
+    text: String,
+    colorScheme: KeyboardColorScheme,
+    shape: RoundedCornerShape
+) {
+    if (!visibleState.value) return
+
+    Popup(
+        alignment = Alignment.Center,
+        offset = IntOffset(0, with(LocalDensity.current) { (-64).dp.toPx().roundToInt() }),
+        properties = PopupProperties(clippingEnabled = false, focusable = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 56.dp, height = 56.dp)
+                .shadow(
+                    elevation = 14.dp,
+                    shape = shape,
+                    ambientColor = Color.Black.copy(alpha = 0.50f),
+                    spotColor = Color.Black.copy(alpha = 0.65f)
+                )
+                .clip(shape)
+                .background(
+                    brush = if (colorScheme.isDark) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.25f),
+                                Color(0xFF262C3A).copy(alpha = 0.65f),
+                                Color(0xFF141720).copy(alpha = 0.90f)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.95f),
+                                Color(0xFFF0F3F8).copy(alpha = 0.70f),
+                                Color(0xFFD6DBE4).copy(alpha = 0.88f)
+                            )
                         )
                     }
-                }
-            }
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = if (colorScheme.isDark) 0.50f else 0.75f),
+                    shape = shape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.75f)
+                    .height(1.5.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 2.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = if (colorScheme.isDark) 0.70f else 0.90f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            Text(
+                text = text,
+                color = if (colorScheme.isDark) Color.White else Color(0xFF12151B),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
     }
 }
