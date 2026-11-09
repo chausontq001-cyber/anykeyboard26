@@ -3,7 +3,7 @@ package com.example.ime.engine
 import com.example.ime.model.TonePlacement
 
 interface TelexEngine : AutoCloseable {
-    var tonePlacement: TonePlacement
+    val tonePlacement: TonePlacement
     val composingText: String
     val hasInput: Boolean
         get() = composingText.isNotEmpty()
