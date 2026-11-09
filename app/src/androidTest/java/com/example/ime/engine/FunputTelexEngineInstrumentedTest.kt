@@ -67,4 +67,28 @@ class FunputTelexEngineInstrumentedTest {
             engine.close()
         }
     }
+
+    @Test
+    fun nativeEngineUsesUniKeyTelexKeysAndRevertBehavior() {
+        val engine = FunputTelexEngine()
+        try {
+            engine.configure(TonePlacement.MODERN)
+            var result = ""
+            "aas".forEach { result = engine.process(it.code) }
+            assertEquals("ấ", result)
+
+            result = engine.process('z'.code)
+            assertEquals("â", result)
+
+            engine.clear()
+            "aaa".forEach { result = engine.process(it.code) }
+            assertEquals("aa", result)
+
+            engine.clear()
+            "dd".forEach { result = engine.process(it.code) }
+            assertEquals("đ", result)
+        } finally {
+            engine.close()
+        }
+    }
 }

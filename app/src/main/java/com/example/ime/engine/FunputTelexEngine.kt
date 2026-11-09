@@ -3,10 +3,15 @@ package com.example.ime.engine
 import app.funput.funput.ime.nativebridge.FunputNative
 import com.example.ime.model.TonePlacement
 
-internal class FunputTelexEngine : TelexEngine() {
+internal class FunputTelexEngine : TelexEngine {
     private var handle = FunputNative.nativeCreate().also {
         check(it != InvalidHandle) { "Unable to create Funput native engine" }
     }
+
+    override var tonePlacement: TonePlacement = TonePlacement.MODERN
+        private set
+    override var composingText: String = ""
+        private set
 
     override fun configure(tonePlacement: TonePlacement) = withHandle { value ->
         // Funput names the first-vowel style "Traditional" and the second-vowel style "Modern".
@@ -21,21 +26,29 @@ internal class FunputTelexEngine : TelexEngine() {
         )
         FunputNative.nativeSetExtraOnsets(value, NoExtraOnsets)
         FunputNative.nativeSetEnabled(value, true)
+        this.tonePlacement = tonePlacement
     }
 
     override fun process(codePoint: Int): String =
-        withHandle { FunputNative.nativeProcess(it, codePoint) }
+        withHandle { value ->
+            FunputNative.nativeProcess(value, codePoint).also { composingText = it }
+        }
 
     override fun processKey(key: String): String {
-        var result = ""
+        var result = composingText
         key.forEach { result = process(it.code) }
         return result
     }
 
     override fun backspace(): String =
-        withHandle(FunputNative::nativeBackspace)
+        withHandle { value ->
+            FunputNative.nativeBackspace(value).also { composingText = it }
+        }
 
-    override fun clear() = withHandle(FunputNative::nativeClear)
+    override fun clear() = withHandle { value ->
+        FunputNative.nativeClear(value)
+        composingText = ""
+    }
 
     override fun reset() = clear()
 
@@ -43,6 +56,7 @@ internal class FunputTelexEngine : TelexEngine() {
         if (handle == InvalidHandle) return
         FunputNative.nativeDestroy(handle)
         handle = InvalidHandle
+        composingText = ""
     }
 
     private inline fun <T> withHandle(operation: (Long) -> T): T {

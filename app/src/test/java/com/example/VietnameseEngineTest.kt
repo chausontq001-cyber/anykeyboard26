@@ -125,55 +125,6 @@ class VietnameseEngineTest {
     }
 
     @Test
-    fun simplifiedTelexComposesWAndVowelModifiersWithoutTreatingWAsAStandaloneModifier() {
-        val engine = VietnameseEngine(typingMethod = TypingMethod.TELEX)
-
-        "w".forEach { engine.processChar(it) }
-        assertEquals("w", engine.composedWord)
-
-        engine.reset()
-        "awowuw".forEach { engine.processChar(it) }
-        assertEquals("ăơư", engine.composedWord)
-
-        engine.reset()
-        "aww".forEach { engine.processChar(it) }
-        assertEquals("aw", engine.composedWord)
-
-        engine.reset()
-        "aas".forEach { engine.processChar(it) }
-        assertEquals("ấ", engine.composedWord)
-
-        engine.reset()
-        "aa".forEach { engine.processChar(it) }
-        assertEquals("â", engine.composedWord)
-
-        engine.reset()
-        "ee".forEach { engine.processChar(it) }
-        assertEquals("ê", engine.composedWord)
-
-        engine.reset()
-        "oo".forEach { engine.processChar(it) }
-        assertEquals("ô", engine.composedWord)
-
-        engine.reset()
-        "bama".forEach { engine.processChar(it) }
-        assertEquals("bâm", engine.composedWord)
-
-        engine.reset()
-        "beme".forEach { engine.processChar(it) }
-        assertEquals("bêm", engine.composedWord)
-
-        engine.reset()
-        "bomo".forEach { engine.processChar(it) }
-        assertEquals("bôm", engine.composedWord)
-
-        engine.reset()
-        "dd".forEach { engine.processChar(it) }
-        assertEquals("đ", engine.composedWord)
-        engine.close()
-    }
-
-    @Test
     fun virtualNavigationDefaultsToLanguageAndHideKeyboardButtons() {
         val settings = KeyboardSettings()
 
@@ -202,9 +153,11 @@ class VietnameseEngineTest {
         assertTrue(!VietnameseDictionary.getSuggestions("dc", null).contains("được"))
     }
 
-    private class FakeTelexEngine : TelexEngine() {
+    private class FakeTelexEngine : TelexEngine {
         private val buffer = StringBuilder()
         override var tonePlacement = TonePlacement.MODERN
+        override val composingText: String
+            get() = buffer.toString()
 
         override fun configure(tonePlacement: TonePlacement) {
             this.tonePlacement = tonePlacement

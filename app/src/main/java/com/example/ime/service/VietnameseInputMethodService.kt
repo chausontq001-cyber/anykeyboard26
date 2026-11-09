@@ -38,7 +38,7 @@ import com.example.ime.NavigationBarPolicy
 import com.example.ime.engine.VietnameseCharUtils
 import com.example.ime.engine.VietnameseDictionary
 import com.example.ime.engine.VietnameseEngine
-import com.example.ime.engine.TelexEngine
+import com.example.ime.engine.FunputTelexEngine
 import com.example.ime.model.KeyboardPreferences
 import com.example.ime.model.TonePlacement
 import com.example.ime.model.TypingMethod
@@ -65,7 +65,7 @@ class VietnameseInputMethodService : InputMethodService(),
 
     private lateinit var preferences: KeyboardPreferences
     private lateinit var engine: VietnameseEngine
-    private val telexEngine = TelexEngine()
+    private val telexEngine = FunputTelexEngine()
 
     private var composingWordState by mutableStateOf("")
     private var suggestionsState by mutableStateOf<List<String>>(emptyList())
