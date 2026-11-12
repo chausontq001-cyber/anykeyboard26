@@ -16,5 +16,8 @@
 local.properties
 .env
 debug.keystore
+/release.keystore
+/.release-signing.env
+/.release-keystore.base64
 cmdline-tools.zip
 *.apk

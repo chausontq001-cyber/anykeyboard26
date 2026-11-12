@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.gradle.api.GradleException
 
 plugins {
   alias(libs.plugins.android.application)
@@ -21,6 +22,37 @@ val funputRustTargets = listOf(
   "arm64-v8a" to "aarch64-linux-android",
   "x86_64" to "x86_64-linux-android"
 )
+val legacyKeystorePath = System.getenv("KEYSTORE_PATH")
+val releaseKeystoreFile = rootProject.file(
+  System.getenv("RELEASE_KEYSTORE_FILE") ?: legacyKeystorePath ?: "release.keystore"
+)
+val releaseStorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+  ?: System.getenv("STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+  ?: if (legacyKeystorePath != null) "upload" else "anykey26"
+val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+  ?: System.getenv("KEY_PASSWORD")
+val releaseUnsigned = providers.gradleProperty("releaseUnsigned").orNull == "true"
+val releaseBuildRequested = gradle.startParameter.taskNames.any { taskPath ->
+  val taskName = taskPath.substringAfterLast(':')
+  taskName == "assembleRelease" || taskName == "bundleRelease" || taskName == "packageRelease"
+}
+
+if (releaseBuildRequested && !releaseUnsigned) {
+  val missing = buildList {
+    if (!releaseKeystoreFile.isFile) add("keystore file")
+    if (releaseStorePassword.isNullOrBlank()) add("keystore password")
+    if (releaseKeyAlias.isBlank()) add("key alias")
+    if (releaseKeyPassword.isNullOrBlank()) add("key password")
+  }
+  if (missing.isNotEmpty()) {
+    throw GradleException(
+      "Cannot build a signed release: missing ${missing.joinToString()}. " +
+        "Set RELEASE_KEYSTORE_FILE, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, " +
+        "and RELEASE_KEY_PASSWORD, or use -PreleaseUnsigned=true for an intentional unsigned build."
+    )
+  }
+}
 
 android {
   namespace = "com.example"
@@ -37,15 +69,14 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Do not remove or modify these signingConfigs. They are necessary for building, installing,
-  // and updating Android apps in AI Studio.
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      if (releaseKeystoreFile.isFile) {
+        storeFile = releaseKeystoreFile
+        storePassword = releaseStorePassword
+        keyAlias = releaseKeyAlias
+        keyPassword = releaseKeyPassword
+      }
     }
   }
 
@@ -54,7 +85,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      if (providers.gradleProperty("releaseUnsigned").orNull != "true") {
+      if (!releaseUnsigned) {
         signingConfig = signingConfigs.getByName("release")
       }
     }
