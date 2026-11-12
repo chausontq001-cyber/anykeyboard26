@@ -19,5 +19,6 @@ debug.keystore
 /release.keystore
 /.release-signing.env
 /.release-keystore.base64
+/anykey26_keystore_backup.zip
 cmdline-tools.zip
 *.apk
