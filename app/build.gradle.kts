@@ -1,4 +1,3 @@
-import java.util.Properties
 import org.gradle.api.GradleException
 
 plugins {
@@ -8,20 +7,6 @@ plugins {
   alias(libs.plugins.secrets)
 }
 
-val funputRoot = rootProject.layout.projectDirectory.dir("third_party/funput").asFile
-val funputBuildScript = file("$funputRoot/platforms/android/scripts/build-rust-jni.sh")
-val funputJniLibs = layout.buildDirectory.dir("generated/funput/jniLibs")
-val funputNdkVersion = "29.0.14206865"
-val localProperties = Properties().apply {
-  rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
-}
-val androidSdkPath: String? = System.getenv("ANDROID_SDK_ROOT")
-  ?: System.getenv("ANDROID_HOME")
-  ?: localProperties.getProperty("sdk.dir")
-val funputRustTargets = listOf(
-  "arm64-v8a" to "aarch64-linux-android",
-  "x86_64" to "x86_64-linux-android"
-)
 val legacyKeystorePath = System.getenv("KEYSTORE_PATH")
 val releaseKeystoreFile = rootProject.file(
   System.getenv("RELEASE_KEYSTORE_FILE") ?: legacyKeystorePath ?: "release.keystore"
@@ -57,7 +42,6 @@ if (releaseBuildRequested && !releaseUnsigned) {
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
-  ndkVersion = funputNdkVersion
 
   defaultConfig {
     applicationId = "com.aistudio.vietkey.vnime"
@@ -119,41 +103,6 @@ android {
       )
     }
   }
-  sourceSets["main"].jniLibs.directories.add(funputJniLibs.get().asFile.absolutePath)
-}
-
-if (funputBuildScript.isFile) {
-  val buildFunputJniTasks = funputRustTargets.map { (abi, rustTarget) ->
-    val taskSuffix = abi.split('-').joinToString("") { it.replaceFirstChar(Char::uppercase) }
-    val abiOutputDirectory = layout.buildDirectory.dir("generated/funput/jniLibs/$abi")
-    val outputDirectoryPath = abiOutputDirectory.get().asFile.absolutePath
-    tasks.register<Exec>("buildFunput${taskSuffix}Jni") {
-      group = "build"
-      description = "Builds Funput's Rust JNI engine for $abi."
-      inputs.files(fileTree(funputRoot) {
-        include("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/**")
-      })
-      inputs.file(funputBuildScript)
-      inputs.property("rustTarget", rustTarget)
-      inputs.property("ndkVersion", funputNdkVersion)
-      outputs.file("$outputDirectoryPath/libfunput_jni.so")
-      if (androidSdkPath != null) {
-        environment("ANDROID_SDK_ROOT", androidSdkPath)
-      }
-      commandLine(
-        "bash",
-        funputBuildScript.absolutePath,
-        rustTarget,
-        abi,
-        "release",
-        outputDirectoryPath,
-        funputNdkVersion
-      )
-    }
-  }
-
-  tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }
-    .configureEach { dependsOn(buildFunputJniTasks) }
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files

@@ -6,7 +6,7 @@ import com.example.ime.model.TypingMethod
 class VietnameseEngine(
     typingMethod: TypingMethod = TypingMethod.TELEX,
     tonePlacement: TonePlacement = TonePlacement.MODERN,
-    private val telexEngineFactory: () -> TelexEngine = { FunputTelexEngine() }
+    private val telexEngineFactory: () -> TelexEngine = { KotlinTelexEngine() }
 ) : AutoCloseable {
     var typingMethod: TypingMethod = typingMethod
         set(value) {
