@@ -22,6 +22,8 @@ jobs:
           distribution: temurin
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Decode keystore
         env:
